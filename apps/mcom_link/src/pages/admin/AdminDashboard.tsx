@@ -2,6 +2,7 @@ import AdminLayout from '../../components/AdminLayout'
 import { Link } from 'react-router-dom'
 
 export default function AdminDashboard() {
+
     const stats = [
         { label: 'Active Locations', value: '12', icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>, trend: '+2 this month' },
         { label: 'Active Businesses', value: '458', icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7" /><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" /><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4" /><path d="M2 7h20" /><path d="M22 7v3a2 2 0 0 1-2 2v0a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12v0a2 2 0 0 1-2-2V7" /></svg>, trend: '+15 this week' },
@@ -76,15 +77,15 @@ export default function AdminDashboard() {
                     <div className="db-card" style={{ background: '#0a0a0a', color: '#fff' }}>
                         <h2 className="db-card-title" style={{ color: '#fff', marginBottom: '1.5rem' }}>Quick Deployment</h2>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                            <button className="db-btn db-btn-primary" style={{ background: '#fff', color: '#0a0a0a', border: 'none', justifyContent: 'center' }}>
+                            <Link to="/admin/locations?action=add" className="db-btn db-btn-primary" style={{ background: '#fff', color: '#0a0a0a', border: 'none', justifyContent: 'center' }}>
                                 Create New Location
-                            </button>
-                            <button className="db-btn db-btn-ghost" style={{ border: '1px solid rgba(255,255,255,0.2)', color: '#fff', justifyContent: 'center' }}>
+                            </Link>
+                            <Link to="/admin/merchants?action=add" className="db-btn db-btn-ghost" style={{ border: '1px solid rgba(255,255,255,0.2)', color: '#fff', justifyContent: 'center' }}>
                                 Onboard Business
-                            </button>
-                            <button className="db-btn db-btn-ghost" style={{ border: '1px solid rgba(255,255,255,0.2)', color: '#fff', justifyContent: 'center' }}>
+                            </Link>
+                            <Link to="/admin/identity" className="db-btn db-btn-ghost" style={{ border: '1px solid rgba(255,255,255,0.2)', color: '#fff', justifyContent: 'center' }}>
                                 Deploy Global Template
-                            </button>
+                            </Link>
                         </div>
                     </div>
 

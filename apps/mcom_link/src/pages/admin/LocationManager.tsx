@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import AdminLayout from '../../components/AdminLayout'
 
 export default function LocationManager() {
@@ -11,15 +11,30 @@ export default function LocationManager() {
 
     const [searchTerm, setSearchTerm] = useState('')
     const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search)
+        if (params.get('action') === 'add') {
+            setIsAddModalOpen(true)
+            // Remove the query param without refreshing to avoid re-opening on back/nav
+            window.history.replaceState({}, document.title, window.location.pathname)
+        }
+    }, [])
+
     const [isManageModalOpen, setIsManageModalOpen] = useState(false)
     const [selectedLocation, setSelectedLocation] = useState<any>(null)
 
     // Form state for new location
     const [newLocation, setNewLocation] = useState({
         name: '',
-        city: '',
-        country: 'United Kingdom'
+        city: 'London'
     })
+
+    const ukCities = [
+        'London', 'Manchester', 'Birmingham', 'Leeds', 'Glasgow',
+        'Liverpool', 'Newcastle', 'Sheffield', 'Bristol', 'Belfast',
+        'Edinburgh', 'Cardiff', 'Nottingham', 'Southampton'
+    ]
 
     const filteredLocations = locations.filter(loc =>
         loc.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -41,9 +56,9 @@ export default function LocationManager() {
     const handleAddLocation = (e: React.FormEvent) => {
         e.preventDefault()
         const id = `loc-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`
-        setLocations([...locations, { ...newLocation, id, businesses: 0, status: 'active', pointer: 0 }])
+        setLocations([...locations, { ...newLocation, id, businesses: 0, status: 'active', pointer: 0, country: 'UK' }])
         setIsAddModalOpen(false)
-        setNewLocation({ name: '', city: '', country: 'United Kingdom' })
+        setNewLocation({ name: '', city: 'London' })
     }
 
     const openManageModal = (loc: any) => {
@@ -205,23 +220,16 @@ export default function LocationManager() {
                                     </div>
                                     <div className="db-form-group">
                                         <label className="db-label">City</label>
-                                        <input
-                                            type="text"
+                                        <select
                                             className="db-input"
-                                            placeholder="e.g. Manchester"
                                             required
                                             value={newLocation.city}
                                             onChange={e => setNewLocation({ ...newLocation, city: e.target.value })}
-                                        />
-                                    </div>
-                                    <div className="db-form-group">
-                                        <label className="db-label">Country</label>
-                                        <input
-                                            type="text"
-                                            className="db-input"
-                                            value={newLocation.country}
-                                            readOnly
-                                        />
+                                        >
+                                            {ukCities.map(city => (
+                                                <option key={city} value={city}>{city}</option>
+                                            ))}
+                                        </select>
                                     </div>
                                 </div>
                             </div>

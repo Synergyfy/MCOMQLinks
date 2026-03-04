@@ -21,6 +21,17 @@ export default function BusinessDetailsPage() {
     }
 
     const businessOffers = mockOffers.filter(o => o.businessName === business.name)
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+    const [newOffer, setNewOffer] = useState({
+        headline: '',
+        description: '',
+        ctaType: 'claim' as any,
+        ctaValue: '',
+        startDate: '',
+        endDate: '',
+        isPremium: false,
+        season: 'all' as any
+    })
 
     const handleAddLog = (e: React.FormEvent) => {
         e.preventDefault()
@@ -36,6 +47,22 @@ export default function BusinessDetailsPage() {
 
         setLogs([newLog, ...logs])
         setNewNote('')
+    }
+
+    const handleAddOffer = (e: React.FormEvent) => {
+        e.preventDefault()
+        alert('Offer draft created and sent to merchant for review!')
+        setIsAddModalOpen(false)
+        setNewOffer({
+            headline: '',
+            description: '',
+            ctaType: 'claim',
+            ctaValue: '',
+            startDate: '',
+            endDate: '',
+            isPremium: false,
+            season: 'all'
+        })
     }
 
     return (
@@ -102,7 +129,7 @@ export default function BusinessDetailsPage() {
                     <div className="db-card">
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                             <h2 className="db-card-title">Live & Scheduled Offers</h2>
-                            <button className="db-btn db-btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}>
+                            <button className="db-btn db-btn-primary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={() => setIsAddModalOpen(true)}>
                                 + Add Offer
                             </button>
                         </div>
@@ -151,6 +178,83 @@ export default function BusinessDetailsPage() {
                 </div>
 
             </div>
+
+            {/* Add Offer Modal */}
+            {isAddModalOpen && (
+                <div className="db-modal-overlay">
+                    <div className="db-modal">
+                        <div className="db-modal-header">
+                            <h3 className="db-card-title">Draft New Offer for {business.name}</h3>
+                            <button onClick={() => setIsAddModalOpen(false)} className="db-btn-close">&times;</button>
+                        </div>
+                        <form onSubmit={handleAddOffer}>
+                            <div className="db-modal-content">
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                        <div className="db-form-group">
+                                            <label className="db-label">Offer Headline</label>
+                                            <input type="text" className="db-input" required placeholder="e.g. 20% Off Footwear" value={newOffer.headline} onChange={e => setNewOffer({ ...newOffer, headline: e.target.value })} />
+                                        </div>
+                                        <div className="db-form-group">
+                                            <label className="db-label">Campaign Description</label>
+                                            <textarea className="db-input" required style={{ height: '80px', resize: 'none' }} placeholder="Max 150 characters..." value={newOffer.description} onChange={e => setNewOffer({ ...newOffer, description: e.target.value })} />
+                                        </div>
+                                        <div className="db-form-group">
+                                            <label className="db-label">CTA Strategy</label>
+                                            <select className="db-input" value={newOffer.ctaType} onChange={e => setNewOffer({ ...newOffer, ctaType: e.target.value as any })}>
+                                                <option value="claim">Lead Generation (Claim)</option>
+                                                <option value="redeem">Direct Sale (Promo Code)</option>
+                                                <option value="redirect">Web Traffic (Redirect)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                        {newOffer.ctaType === 'redirect' && (
+                                            <div className="db-form-group">
+                                                <label className="db-label">Destination Link</label>
+                                                <input type="url" className="db-input" required placeholder="https://..." value={newOffer.ctaValue} onChange={e => setNewOffer({ ...newOffer, ctaValue: e.target.value })} />
+                                            </div>
+                                        )}
+                                        {newOffer.ctaType === 'redeem' && (
+                                            <div className="db-form-group">
+                                                <label className="db-label">Promo Code</label>
+                                                <input type="text" className="db-input" required placeholder="e.g. AGENT20" value={newOffer.ctaValue} onChange={e => setNewOffer({ ...newOffer, ctaValue: e.target.value })} />
+                                            </div>
+                                        )}
+                                        {newOffer.ctaType === 'claim' && (
+                                            <div className="db-form-group">
+                                                <label className="db-label">Claim Target (Email/Phone)</label>
+                                                <input type="text" className="db-input" required placeholder="e.g. shop@email.com" value={newOffer.ctaValue} onChange={e => setNewOffer({ ...newOffer, ctaValue: e.target.value })} />
+                                            </div>
+                                        )}
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                            <div className="db-form-group">
+                                                <label className="db-label">Start Date</label>
+                                                <input type="date" className="db-input" required value={newOffer.startDate} onChange={e => setNewOffer({ ...newOffer, startDate: e.target.value })} />
+                                            </div>
+                                            <div className="db-form-group">
+                                                <label className="db-label">End Date</label>
+                                                <input type="date" className="db-input" required value={newOffer.endDate} onChange={e => setNewOffer({ ...newOffer, endDate: e.target.value })} />
+                                            </div>
+                                        </div>
+                                        <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                            <input type="checkbox" id="premium-toggle" checked={newOffer.isPremium} onChange={e => setNewOffer({ ...newOffer, isPremium: e.target.checked })} style={{ width: '18px', height: '18px' }} />
+                                            <div>
+                                                <label htmlFor="premium-toggle" style={{ fontWeight: 800, fontSize: '0.85rem', display: 'block' }}>Suggest Premium Boost</label>
+                                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Merchant must authorize upgrade.</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="db-modal-footer">
+                                <button type="button" className="db-btn db-btn-ghost" onClick={() => setIsAddModalOpen(false)}>Cancel</button>
+                                <button type="submit" className="db-btn db-btn-primary">Submit Draft to Merchant</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </AgentLayout>
     )
 }

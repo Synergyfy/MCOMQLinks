@@ -14,6 +14,8 @@ export default function OffersPage() {
         description: '',
         ctaType: 'claim',
         ctaLabel: 'Claim This Offer',
+        redirectUrl: '',
+        redemptionCode: '',
         imageUrl: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=600&h=400&fit=crop',
         startDate: new Date().toISOString().split('T')[0],
         endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -187,7 +189,7 @@ export default function OffersPage() {
                                                 value={newOffer.ctaType}
                                                 onChange={(e) => setNewOffer({ ...newOffer, ctaType: e.target.value as any })}
                                             >
-                                                <option value="claim">Claim Coupon (Email)</option>
+                                                <option value="claim">Claim Coupon (Lead)</option>
                                                 <option value="redeem">Redeem Instantly (Code)</option>
                                                 <option value="redirect">External Website</option>
                                             </select>
@@ -202,6 +204,49 @@ export default function OffersPage() {
                                             />
                                         </div>
                                     </div>
+
+                                    {newOffer.ctaType === 'redirect' && (
+                                        <div className="db-form-group">
+                                            <label className="db-label">Target Website URL</label>
+                                            <input
+                                                type="url"
+                                                className="db-input"
+                                                placeholder="https://yourwebsite.com/offer"
+                                                value={newOffer.redirectUrl}
+                                                onChange={(e) => setNewOffer({ ...newOffer, redirectUrl: e.target.value })}
+                                                required
+                                            />
+                                        </div>
+                                    )}
+
+                                    {newOffer.ctaType === 'redeem' && (
+                                        <div className="db-form-group">
+                                            <label className="db-label">Promo Code</label>
+                                            <input
+                                                type="text"
+                                                className="db-input"
+                                                placeholder="e.g. SUMMER2026"
+                                                value={newOffer.redemptionCode}
+                                                onChange={(e) => setNewOffer({ ...newOffer, redemptionCode: e.target.value })}
+                                                required
+                                            />
+                                        </div>
+                                    )}
+
+                                    {newOffer.ctaType === 'claim' && (
+                                        <div className="db-form-group">
+                                            <label className="db-label">Lead Destination (Email/Phone)</label>
+                                            <input
+                                                type="text"
+                                                className="db-input"
+                                                placeholder="Where should leads be sent?"
+                                                value={newOffer.redemptionInstructions}
+                                                onChange={(e) => setNewOffer({ ...newOffer, redemptionInstructions: e.target.value })}
+                                                required
+                                            />
+                                            <small className="db-help">Leads will be forwarded to this contact.</small>
+                                        </div>
+                                    )}
 
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                         <div className="db-form-group">

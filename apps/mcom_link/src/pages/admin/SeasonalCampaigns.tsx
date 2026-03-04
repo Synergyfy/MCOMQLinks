@@ -3,7 +3,20 @@ import AdminLayout from '../../components/AdminLayout'
 import { mockSeasons } from '../../mock/admin'
 
 export default function SeasonalCampaigns() {
-    const [seasons] = useState(mockSeasons)
+    const [seasons, setSeasons] = useState(mockSeasons)
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+    const [selectedSeason, setSelectedSeason] = useState<any>(null)
+
+    const openEditModal = (season: any) => {
+        setSelectedSeason({ ...season })
+        setIsEditModalOpen(true)
+    }
+
+    const handleUpdateSeason = (e: React.FormEvent) => {
+        e.preventDefault()
+        setSeasons(seasons.map(s => s.id === selectedSeason.id ? selectedSeason : s))
+        setIsEditModalOpen(false)
+    }
 
     return (
         <AdminLayout title="Seasonal Automation">
@@ -15,7 +28,7 @@ export default function SeasonalCampaigns() {
                         <div key={season.id} className="db-card" style={{
                             padding: '1.5rem',
                             background: season.isActive ? 'rgba(37, 99, 235, 0.05)' : '#fff',
-                            border: `2px solid ${season.isActive ? '#2563eb' : '#f1f5f9'}`,
+                            border: `2px solid ${season.isActive ? '#2563eb' : '#f1f5f9'} `,
                             position: 'relative'
                         }}>
                             {season.isActive && (
@@ -28,7 +41,11 @@ export default function SeasonalCampaigns() {
                             <p style={{ marginTop: '1.25rem', fontSize: '0.8rem', color: '#64748b', margin: '1rem 0 0' }}>
                                 {season.isActive ? 'Offers are currently live in rotator' : 'Scheduled automation pending'}
                             </p>
-                            <button className="db-btn db-btn-ghost" style={{ width: '100%', marginTop: '1.5rem', fontSize: '0.8rem', justifyContent: 'center' }}>
+                            <button
+                                className="db-btn db-btn-ghost"
+                                style={{ width: '100%', marginTop: '1.5rem', fontSize: '0.8rem', justifyContent: 'center' }}
+                                onClick={() => openEditModal(season)}
+                            >
                                 Edit Dates
                             </button>
                         </div>
@@ -98,6 +115,52 @@ export default function SeasonalCampaigns() {
                     </p>
                 </div>
             </div>
+
+            {/* Edit Season Modal */}
+            {isEditModalOpen && selectedSeason && (
+                <div className="db-modal-overlay">
+                    <div className="db-modal" style={{ maxWidth: '400px' }}>
+                        <div className="db-modal-header">
+                            <h3 className="db-card-title">Adjust {selectedSeason.name} Dates</h3>
+                            <button onClick={() => setIsEditModalOpen(false)} className="db-btn-close">&times;</button>
+                        </div>
+                        <form onSubmit={handleUpdateSeason}>
+                            <div className="db-modal-content">
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                    <div className="db-form-group">
+                                        <label className="db-label">Campaign Start Date</label>
+                                        <input
+                                            type="date"
+                                            className="db-input"
+                                            required
+                                            value={selectedSeason.startDate.split('T')[0]}
+                                            onChange={e => setSelectedSeason({ ...selectedSeason, startDate: e.target.value })}
+                                        />
+                                    </div>
+                                    <div className="db-form-group">
+                                        <label className="db-label">Campaign End Date</label>
+                                        <input
+                                            type="date"
+                                            className="db-input"
+                                            required
+                                            value={selectedSeason.endDate.split('T')[0]}
+                                            onChange={e => setSelectedSeason({ ...selectedSeason, endDate: e.target.value })}
+                                        />
+                                    </div>
+                                    <div style={{ padding: '1rem', background: '#f0fdf4', borderRadius: '0.75rem', border: '1px solid rgba(22, 163, 74, 0.1)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#16a34a' }} />
+                                        <span style={{ fontSize: '0.75rem', color: '#166534', fontWeight: 600 }}>Automation will auto-apply to all tagged offers.</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="db-modal-footer">
+                                <button type="button" className="db-btn db-btn-ghost" onClick={() => setIsEditModalOpen(false)}>Back</button>
+                                <button type="submit" className="db-btn db-btn-primary">Update Cycle</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </AdminLayout>
     )
 }

@@ -1,13 +1,7 @@
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import AgentLayout from '../../components/AgentLayout'
-import { mockPortfolio } from '../../mock/agents'
-import { mockBusiness } from '../../mock/business'
-import { mockOffers } from '../../mock/offers'
 
 export default function PortfolioPage() {
-    const [filter, setFilter] = useState('all')
-
     // In a real app, we'd filter businesses by mockPortfolio.businessIds
     // For now, we'll simulate a list of businesses assigned to the agent
     const myBusinesses = [
@@ -54,7 +48,7 @@ export default function PortfolioPage() {
                             </tr>
                         </thead>
                         <tbody>
-                            {sortedBusinesses.map((biz, index) => (
+                            {sortedBusinesses.map((biz) => (
                                 <tr key={biz.id}>
                                     <td>
                                         <Link to={`/agent/business/${biz.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>

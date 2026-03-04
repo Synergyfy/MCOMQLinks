@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import AgentLayout from '../../components/AgentLayout'
 import { mockCommLogs, type CommLog } from '../../mock/agents'
 import { mockOffers } from '../../mock/offers'

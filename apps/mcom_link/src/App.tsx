@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import './App.css'
 import rotatorImg from './assets/rotator.png'
 
@@ -85,9 +86,11 @@ function App() {
             ))}
           </div>
 
-          <div className="auth-buttons">
-            <button className="btn-ghost">Sign In</button>
-            <button className="btn-premium">Get Started <ArrowRight /></button>
+          <div className="auth-buttons" style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+            <Link to="/login" className="btn-ghost" style={{ textDecoration: 'none' }}>Sign In</Link>
+            <Link to="/login" className="btn-premium" style={{ textDecoration: 'none' }}>
+              Get Started <ArrowRight />
+            </Link>
           </div>
         </nav>
 
@@ -103,9 +106,9 @@ function App() {
               automated, sequential offer rotation and real-time engagement analytics.
             </p>
             <div className="hero-ctas">
-              <button className="btn-premium" style={{ padding: '0.85rem 2rem', fontSize: '0.95rem' }}>
+              <Link to="/login" className="btn-premium" style={{ padding: '0.85rem 2rem', fontSize: '0.95rem', textDecoration: 'none' }}>
                 Launch Your Rotator <ArrowRight />
-              </button>
+              </Link>
               <button className="btn-ghost" style={{ padding: '0.85rem 2rem', fontSize: '0.95rem', display: 'flex', alignItems: 'center' }}>
                 <PlayIcon /> Watch Demo
               </button>
@@ -216,9 +219,9 @@ function App() {
             Join the thousands of businesses already using MCOMLINKS to automate their marketing machine.
           </p>
           <div className="hero-ctas" style={{ justifyContent: 'center' }}>
-            <button className="btn-premium" style={{ padding: '1.1rem 3rem', fontSize: '1.05rem' }}>
+            <Link to="/login" className="btn-premium" style={{ padding: '1.1rem 3rem', fontSize: '1.05rem', textDecoration: 'none' }}>
               Start Your Journey <ArrowRight />
-            </button>
+            </Link>
           </div>
         </section>
 

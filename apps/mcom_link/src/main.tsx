@@ -13,6 +13,7 @@ import ClaimPage from './pages/ClaimPage.tsx'
 import RedeemPage from './pages/RedeemPage.tsx'
 import ConfirmationPage from './pages/ConfirmationPage.tsx'
 import FallbackPage from './pages/FallbackPage.tsx'
+import LoginPage from './pages/LoginPage.tsx'
 
 // Dashboard Pages
 import DashboardHome from './pages/dashboard/DashboardHome.tsx'
@@ -43,6 +44,7 @@ createRoot(document.getElementById('root')!).render(
       <Routes>
         {/* Marketing Homepage */}
         <Route path="/" element={<App />} />
+        <Route path="/login" element={<LoginPage />} />
 
         {/* Rotator Storefront Routes (Dynamic) */}
         <Route path="/r/:locationId" element={<StorefrontPage />} />

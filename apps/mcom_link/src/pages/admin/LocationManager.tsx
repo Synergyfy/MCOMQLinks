@@ -1,33 +1,36 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import AdminLayout from '../../components/AdminLayout'
+import { mockOffers, toggleOfferPremium } from '../../mock/offers'
+import { getRotatorConfig, saveRotatorConfig, type RotatorConfig, type RotationType, type FallbackBehavior } from '../../mock/rotatorStore'
+import { getOfferStats } from '../../mock/tracker'
 
 export default function LocationManager() {
+    const [activeTab, setActiveTab] = useState<'national' | 'hyperlocal'>('national')
     const [locations, setLocations] = useState([
-        { id: 'loc-001', name: 'High Street Central', city: 'London', businesses: 24, status: 'active', pointer: 3, country: 'UK' },
-        { id: 'loc-002', name: 'Mall North Wing', city: 'London', businesses: 18, status: 'active', pointer: 12, country: 'UK' },
-        { id: 'loc-003', name: 'East Plaza Square', city: 'Manchester', businesses: 12, status: 'paused', pointer: 0, country: 'UK' },
-        { id: 'loc-004', name: 'West End Hub', city: 'Birmingham', businesses: 32, status: 'active', pointer: 7, country: 'UK' }
+        { id: 'loc-001', name: 'High Street Central', city: 'London', businesses: 24, status: 'active', pointer: 3, country: 'UK', type: 'national', postcode: 'W1A 1AA' },
+        { id: 'loc-002', name: 'Mall North Wing', city: 'London', businesses: 18, status: 'active', pointer: 12, country: 'UK', type: 'national', postcode: 'E1 6AN' },
+        { id: 'loc-003', name: 'East Plaza Square', city: 'Manchester', businesses: 12, status: 'paused', pointer: 0, country: 'UK', type: 'national', postcode: 'M1 1AD' },
+        { id: 'loc-004', name: 'West End Hub', city: 'Birmingham', businesses: 32, status: 'active', pointer: 7, country: 'UK', type: 'national', postcode: 'B1 1BB' },
+        { id: 'loc-005', name: 'Soho Boutique Radius', city: 'London', businesses: 8, status: 'active', pointer: 2, country: 'UK', type: 'hyperlocal', postcode: 'W1F 0AA' },
+        { id: 'loc-006', name: 'Shoreditch Tech Loop', city: 'London', businesses: 15, status: 'active', pointer: 5, country: 'UK', type: 'hyperlocal', postcode: 'EC2A 3AY' }
     ])
 
     const [searchTerm, setSearchTerm] = useState('')
     const [isAddModalOpen, setIsAddModalOpen] = useState(false)
-
-    useEffect(() => {
-        const params = new URLSearchParams(window.location.search)
-        if (params.get('action') === 'add') {
-            setIsAddModalOpen(true)
-            // Remove the query param without refreshing to avoid re-opening on back/nav
-            window.history.replaceState({}, document.title, window.location.pathname)
-        }
-    }, [])
-
     const [isManageModalOpen, setIsManageModalOpen] = useState(false)
     const [selectedLocation, setSelectedLocation] = useState<any>(null)
+    const [rotatorConfig, setRotatorConfig] = useState<RotatorConfig | null>(null)
+    const [offersObj, setOffersObj] = useState([...mockOffers])
+
+    const [isQRModalOpen, setIsQRModalOpen] = useState(false)
+    const [selectedQRLocation, setSelectedQRLocation] = useState<any>(null)
 
     // Form state for new location
     const [newLocation, setNewLocation] = useState({
         name: '',
-        city: 'London'
+        city: 'London',
+        type: 'national' as 'national' | 'hyperlocal',
+        postcode: ''
     })
 
     const ukCities = [
@@ -36,10 +39,13 @@ export default function LocationManager() {
         'Edinburgh', 'Cardiff', 'Nottingham', 'Southampton'
     ]
 
-    const filteredLocations = locations.filter(loc =>
-        loc.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        loc.city.toLowerCase().includes(searchTerm.toLowerCase())
-    )
+    const filteredLocations = locations.filter(loc => {
+        const matchesSearch = loc.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            loc.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            loc.postcode.toLowerCase().includes(searchTerm.toLowerCase())
+        const matchesTab = loc.type === activeTab
+        return matchesSearch && matchesTab
+    })
 
     const toggleStatus = (id: string) => {
         setLocations(locations.map(loc =>
@@ -58,23 +64,121 @@ export default function LocationManager() {
         const id = `loc-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`
         setLocations([...locations, { ...newLocation, id, businesses: 0, status: 'active', pointer: 0, country: 'UK' }])
         setIsAddModalOpen(false)
-        setNewLocation({ name: '', city: 'London' })
+        setNewLocation({ name: '', city: 'London', type: 'national', postcode: '' })
     }
 
     const openManageModal = (loc: any) => {
         setSelectedLocation(loc)
+        setRotatorConfig(getRotatorConfig(loc.id))
         setIsManageModalOpen(true)
     }
 
+    const handleSaveConfig = () => {
+        if (rotatorConfig) {
+            saveRotatorConfig(rotatorConfig)
+            setIsManageModalOpen(false)
+        }
+    }
+
+    const openQRModal = (loc: any) => {
+        setSelectedQRLocation(loc)
+        setIsQRModalOpen(true)
+    }
+
+    const downloadQR = async (loc: any) => {
+        const url = `https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${encodeURIComponent(window.location.origin + '/r/' + loc.id)}`
+        try {
+            const response = await fetch(url)
+            const blob = await response.blob()
+            const blobUrl = window.URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            link.href = blobUrl
+            link.download = `QR_${loc.id}_${loc.name.replace(/\s+/g, '_')}.png`
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+            window.URL.revokeObjectURL(blobUrl)
+        } catch (error) {
+            console.error('Download failed', error)
+            // Fallback: Open in new tab
+            window.open(url, '_blank')
+        }
+    }
+
+    const [offerSearchTerm, setOfferSearchTerm] = useState('')
+    const [showAddOfferPanel, setShowAddOfferPanel] = useState(false)
+
+    const updateConfig = (updates: Partial<RotatorConfig>) => {
+        if (!rotatorConfig) return
+        const newConfig = { ...rotatorConfig, ...updates }
+        setRotatorConfig(newConfig)
+        saveRotatorConfig(newConfig)
+    }
+
+    const addOfferToRotator = (offerId: string) => {
+        if (!rotatorConfig || rotatorConfig.offerSequence.includes(offerId)) return
+        updateConfig({
+            offerSequence: [...rotatorConfig.offerSequence, offerId]
+        })
+        setOfferSearchTerm('')
+    }
+
+    const addBusinessToRotator = (businessName: string) => {
+        if (!rotatorConfig) return
+        const businessOffers = mockOffers.filter(o => o.businessName === businessName && o.status === 'approved')
+        const newIds = businessOffers.map(o => o.id).filter(id => !rotatorConfig.offerSequence.includes(id))
+        if (newIds.length === 0) return
+        updateConfig({
+            offerSequence: [...rotatorConfig.offerSequence, ...newIds]
+        })
+    }
+
+    const removeOfferFromRotator = (offerId: string) => {
+        if (!rotatorConfig) return
+        updateConfig({
+            offerSequence: rotatorConfig.offerSequence.filter(id => id !== offerId)
+        })
+    }
+
+    const moveOffer = (index: number, direction: 'up' | 'down') => {
+        if (!rotatorConfig) return
+        const sequence = [...(rotatorConfig.offerSequence.length > 0 ? rotatorConfig.offerSequence : mockOffers.map(o => o.id))]
+        const newIndex = direction === 'up' ? index - 1 : index + 1
+        if (newIndex < 0 || newIndex >= sequence.length) return
+
+        [sequence[index], sequence[newIndex]] = [sequence[newIndex], sequence[index]]
+        updateConfig({ offerSequence: sequence })
+    }
+
+
+    const getOrderedOffers = () => {
+        if (!rotatorConfig) return []
+        const sequence = rotatorConfig.offerSequence.length > 0 ? rotatorConfig.offerSequence : offersObj.map(o => o.id)
+        const items = sequence
+            .map(id => offersObj.find(o => o.id === id))
+            .filter((o): o is any => !!o)
+
+        // Sync sorting with engine logic
+        return items.sort((a, b) => {
+            if (a.isPremium === b.isPremium) return 0
+            return a.isPremium ? -1 : 1
+        })
+    }
+
+    const handleTogglePremium = (id: string) => {
+        toggleOfferPremium(id)
+        setOffersObj([...mockOffers])
+    }
+
+
     return (
         <AdminLayout title="Network Management">
-            {/* 1. Global Scale - Step 90-105 */}
             <div className="db-card" style={{ marginBottom: '2rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
                         <div>
-                            <h2 className="db-card-title">Active Locations</h2>
-                            <p style={{ color: '#64748b', fontSize: '0.85rem' }}>Management of high street clusters and shopping mall zones.</p>
+                            <h2 className="db-card-title">Rotator Network</h2>
+                            <p style={{ color: '#64748b', fontSize: '0.85rem' }}>Management of high street clusters and local radius hubs.</p>
                         </div>
                         <div style={{ position: 'relative' }}>
                             <input
@@ -88,34 +192,137 @@ export default function LocationManager() {
                             <svg style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
                         </div>
                     </div>
-                    <button className="db-btn db-btn-primary" onClick={() => setIsAddModalOpen(true)}>+ Add New Location</button>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <div style={{ display: 'flex', background: '#f1f5f9', padding: '0.25rem', borderRadius: '0.75rem', marginRight: '1rem' }}>
+                            <button
+                                onClick={() => setActiveTab('national')}
+                                style={{
+                                    padding: '0.5rem 1.25rem',
+                                    border: 'none',
+                                    borderRadius: '0.5rem',
+                                    fontSize: '0.85rem',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    background: activeTab === 'national' ? '#fff' : 'transparent',
+                                    color: activeTab === 'national' ? '#2563eb' : '#64748b',
+                                    boxShadow: activeTab === 'national' ? '0 2px 4px rgba(0,0,0,0.05)' : 'none',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                🌐 National
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('hyperlocal')}
+                                style={{
+                                    padding: '0.5rem 1.25rem',
+                                    border: 'none',
+                                    borderRadius: '0.5rem',
+                                    fontSize: '0.85rem',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    background: activeTab === 'hyperlocal' ? '#fff' : 'transparent',
+                                    color: activeTab === 'hyperlocal' ? '#2563eb' : '#64748b',
+                                    boxShadow: activeTab === 'hyperlocal' ? '0 2px 4px rgba(0,0,0,0.05)' : 'none',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                📍 Hyperlocal
+                            </button>
+                        </div>
+                        <button className="db-btn db-btn-primary" onClick={() => setIsAddModalOpen(true)}>+ Add New Rotator</button>
+                    </div>
                 </div>
 
                 <div className="db-table-wrapper">
                     <table className="db-table">
                         <thead>
                             <tr>
-                                <th>Location Name</th>
-                                <th>Coverage</th>
-                                <th>Rotator Status</th>
-                                <th>Current Position</th>
-                                <th style={{ textAlign: 'right' }}>Core Controls</th>
+                                <th>{activeTab === 'national' ? 'Hub Name' : 'Radius Hub'}</th>
+                                <th>{activeTab === 'national' ? 'Coverage' : 'Target Point'}</th>
+                                <th>Status</th>
+                                <th>Public Link & QR</th>
+                                <th>Position</th>
+                                <th style={{ textAlign: 'right' }}>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {filteredLocations.map(loc => (
                                 <tr key={loc.id}>
                                     <td>
-                                        <div style={{ fontWeight: 800 }}>{loc.name}</div>
+                                        <div
+                                            style={{ fontWeight: 800, cursor: 'pointer', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                                            onClick={() => openManageModal(loc)}
+                                        >
+                                            {loc.name}
+                                            {loc.type === 'hyperlocal' && (
+                                                <span style={{ fontSize: '0.65rem', background: '#3b82f6', color: '#fff', padding: '1px 4px', borderRadius: '4px' }}>5mi</span>
+                                            )}
+                                        </div>
                                         <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{loc.city}, UK</div>
                                     </td>
                                     <td>
-                                        <div style={{ fontSize: '0.85rem', fontWeight: 700 }}>{loc.businesses} Businesses</div>
+                                        {loc.type === 'hyperlocal' ? (
+                                            <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#0f172a', padding: '0.25rem 0.5rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '0.5rem', display: 'inline-block' }}>
+                                                📮 {loc.postcode}
+                                            </div>
+                                        ) : (
+                                            <div style={{ fontSize: '0.85rem', fontWeight: 700 }}>{loc.businesses} Businesses</div>
+                                        )}
                                     </td>
                                     <td>
                                         <span className={`db-badge db-badge-${loc.status === 'active' ? 'approved' : 'rejected'}`}>
                                             {loc.status === 'active' ? 'ACTIVE' : 'PAUSED'}
                                         </span>
+                                    </td>
+                                    <td>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                <a
+                                                    href={`/r/${loc.id}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    style={{
+                                                        fontSize: '0.75rem',
+                                                        color: '#2563eb',
+                                                        textDecoration: 'none',
+                                                        fontWeight: 700,
+                                                        fontFamily: 'monospace',
+                                                        background: '#eff6ff',
+                                                        padding: '0.2rem 0.5rem',
+                                                        borderRadius: '4px',
+                                                        border: '1px solid rgba(37, 99, 235, 0.1)'
+                                                    }}
+                                                >
+                                                    mcom.links/r/{loc.id}
+                                                </a>
+                                            </div>
+                                            <button
+                                                onClick={() => openQRModal(loc)}
+                                                title="View & Download QR"
+                                                style={{
+                                                    width: '32px',
+                                                    height: '32px',
+                                                    background: '#fff',
+                                                    padding: '2px',
+                                                    border: '1px solid #e2e8f0',
+                                                    borderRadius: '6px',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    transition: 'all 0.2s',
+                                                    cursor: 'pointer',
+                                                    boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                                                }}
+                                                onMouseOver={e => e.currentTarget.style.transform = 'scale(1.1)'}
+                                                onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
+                                            >
+                                                <img
+                                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(window.location.origin + '/r/' + loc.id)}`}
+                                                    alt="QR Code"
+                                                    style={{ width: '100%', height: '100%', imageRendering: 'pixelated' }}
+                                                />
+                                            </button>
+                                        </div>
                                     </td>
                                     <td>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', position: 'relative' }} title="Pointer: The current offer index being served. Each scan increments this value.">
@@ -153,7 +360,7 @@ export default function LocationManager() {
                 </div>
             </div>
 
-            {/* 2. Rotator Logic Visualization - Step 107-130 */}
+            {/* Rotator Quick Override Grid */}
             <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '2rem' }}>
                 <div className="db-card">
                     <h2 className="db-card-title" style={{ marginBottom: '1.5rem' }}>Global Rotation Engine Health</h2>
@@ -174,29 +381,21 @@ export default function LocationManager() {
                                 <div key={i} style={{ flex: 1, height: `${h}%`, background: '#2563eb', borderRadius: '2px' }} />
                             ))}
                         </div>
-                        <p style={{ marginTop: '1.5rem', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', textAlign: 'center' }}>
-                            Pointer distribution across atomic persistence layer (Last 60s)
-                        </p>
                     </div>
                 </div>
 
                 <div className="db-card" style={{ border: '2px dashed #e2e8f0', background: 'transparent' }}>
                     <h2 className="db-card-title">Rotator Quick Override</h2>
                     <p style={{ fontSize: '0.85rem', color: '#64748b', lineHeight: '1.5', marginBottom: '1.5rem' }}>
-                        Manually pause all high-street rotations for emergency system maintenance.
+                        Manually pause all high-street rotations for emergency maintenance.
                     </p>
-                    <button className="db-btn db-btn-primary" style={{ width: '100%', background: '#ef4444', color: '#fff', border: 'none', justifyContent: 'center' }}>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px' }}><path d="m12 14 4-4" /><path d="M3.34 19a10 10 0 1 1 17.32 0" /></svg>
+                    <button className="db-btn db-btn-primary" style={{ width: '100%', background: '#ef4444', color: '#fff' }}>
                         EMERGENCY SYSTEM PAUSE
                     </button>
-                    <div style={{ marginTop: '1.5rem', background: '#fef2f2', padding: '1rem', borderRadius: '0.75rem', border: '1px solid rgba(239, 68, 68, 0.1)' }}>
-                        <p style={{ fontSize: '0.7rem', color: '#b91c1c', fontWeight: 700, margin: 0, textAlign: 'center' }}>
-                            PAUSING SYSTEM WILL FALLBACK ALL STOREFRONTS TO BRANDED DEFAULT
-                        </p>
-                    </div>
                 </div>
             </div>
-            {/* 1. Add Location Modal */}
+
+            {/* Add Location Modal */}
             {isAddModalOpen && (
                 <div className="db-modal-overlay">
                     <div className="db-modal" style={{ maxWidth: '500px' }}>
@@ -208,89 +407,404 @@ export default function LocationManager() {
                             <div className="db-modal-content">
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                                     <div className="db-form-group">
+                                        <label className="db-label">Rotator Type</label>
+                                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => setNewLocation({ ...newLocation, type: 'national' })}
+                                                className={`db-btn ${newLocation.type === 'national' ? 'db-btn-primary' : 'db-btn-ghost'}`}
+                                                style={{ flex: 1, padding: '0.5rem' }}
+                                            >
+                                                🌐 National
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setNewLocation({ ...newLocation, type: 'hyperlocal' })}
+                                                className={`db-btn ${newLocation.type === 'hyperlocal' ? 'db-btn-primary' : 'db-btn-ghost'}`}
+                                                style={{ flex: 1, padding: '0.5rem' }}
+                                            >
+                                                📍 Hyperlocal
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="db-form-group">
                                         <label className="db-label">Location Name</label>
                                         <input
                                             type="text"
                                             className="db-input"
-                                            placeholder="e.g. Piccadilly Garden Cluster"
+                                            placeholder={newLocation.type === 'national' ? "e.g. Piccadilly Garden Cluster" : "e.g. Soho 5ml Radius Hub"}
                                             required
                                             value={newLocation.name}
                                             onChange={e => setNewLocation({ ...newLocation, name: e.target.value })}
                                         />
                                     </div>
-                                    <div className="db-form-group">
-                                        <label className="db-label">City</label>
-                                        <select
-                                            className="db-input"
-                                            required
-                                            value={newLocation.city}
-                                            onChange={e => setNewLocation({ ...newLocation, city: e.target.value })}
-                                        >
-                                            {ukCities.map(city => (
-                                                <option key={city} value={city}>{city}</option>
-                                            ))}
-                                        </select>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                        <div className="db-form-group">
+                                            <label className="db-label">City</label>
+                                            <select
+                                                className="db-input"
+                                                required
+                                                value={newLocation.city}
+                                                onChange={e => setNewLocation({ ...newLocation, city: e.target.value })}
+                                            >
+                                                {ukCities.map(city => (
+                                                    <option key={city} value={city}>{city}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="db-form-group">
+                                            <label className="db-label">{newLocation.type === 'hyperlocal' ? 'Center Postcode' : 'Base Postcode'}</label>
+                                            <input
+                                                type="text"
+                                                className="db-input"
+                                                placeholder="e.g. W1F 0AA"
+                                                required
+                                                value={newLocation.postcode}
+                                                onChange={e => setNewLocation({ ...newLocation, postcode: e.target.value.toUpperCase() })}
+                                            />
+                                        </div>
                                     </div>
+                                    {newLocation.type === 'hyperlocal' && (
+                                        <div style={{ padding: '0.75rem', background: '#eff6ff', borderRadius: '0.5rem', border: '1px solid #bfdbfe' }}>
+                                            <p style={{ fontSize: '0.7rem', color: '#1e40af', margin: 0 }}>
+                                                <strong>Radius Rule:</strong> This rotator will automatically capture all business offers within a 5-mile radius of <strong>{newLocation.postcode || 'the center'}</strong>.
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                             <div className="db-modal-footer">
                                 <button type="button" className="db-btn db-btn-ghost" onClick={() => setIsAddModalOpen(false)}>Cancel</button>
-                                <button type="submit" className="db-btn db-btn-primary">Provision Location</button>
+                                <button type="submit" className="db-btn db-btn-primary">Provision Rotator</button>
                             </div>
                         </form>
                     </div>
                 </div>
             )}
 
-            {/* 2. Manage Businesses Modal */}
-            {isManageModalOpen && selectedLocation && (
+            {/* Rotator Configuration Modal */}
+            {isManageModalOpen && selectedLocation && rotatorConfig && (
                 <div className="db-modal-overlay">
-                    <div className="db-modal">
+                    <div className="db-modal" style={{ maxWidth: '900px', width: '90vw' }}>
                         <div className="db-modal-header">
                             <div>
-                                <h3 className="db-card-title">Manage {selectedLocation.name}</h3>
-                                <p style={{ fontSize: '0.75rem', color: '#64748b', margin: 0 }}>Cluster Hub: {selectedLocation.id}</p>
+                                <h3 className="db-card-title">Rotator Engine: {selectedLocation.name}</h3>
+                                <p style={{ fontSize: '0.75rem', color: '#64748b', margin: 0 }}>Advanced sequence and delivery control</p>
                             </div>
                             <button onClick={() => setIsManageModalOpen(false)} className="db-btn-close">&times;</button>
                         </div>
-                        <div className="db-modal-content" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
-                            <div>
-                                <h4 style={{ fontSize: '0.9rem', marginBottom: '1rem', fontWeight: 800 }}>Assigned Businesses ({selectedLocation.businesses})</h4>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '300px', overflowY: 'auto', padding: '0.5rem', border: '1px solid #f1f5f9', borderRadius: '0.75rem' }}>
-                                    {['The Daily Grind', 'Bella\'s Boutique', 'Eco-Flow Shop', 'Urban Tech', 'Petal & Stem'].slice(0, selectedLocation.businesses % 5 + 3).map((name, i) => (
-                                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', background: '#f8fafc', borderRadius: '0.5rem' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }} />
-                                                <div style={{ fontSize: '0.85rem', fontWeight: 700 }}>{name}</div>
-                                            </div>
-                                            <button className="db-btn db-btn-ghost" style={{ padding: '0.25rem 0.5rem', color: '#ef4444', border: 'none', fontSize: '0.7rem' }}>Remove</button>
-                                        </div>
-                                    ))}
+                        <div className="db-modal-content" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.8fr', gap: '2rem' }}>
+                            {/* Left: General Settings */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', borderRight: '1px solid #f1f5f9', paddingRight: '1.5rem' }}>
+                                <div>
+                                    <label className="db-label">Rotation Strategy</label>
+                                    <select
+                                        className="db-input"
+                                        value={rotatorConfig.type}
+                                        onChange={e => updateConfig({ type: e.target.value as RotationType })}
+                                    >
+                                        <option value="sequential">Sequential (In Order)</option>
+                                        <option value="random">Weighted Random</option>
+                                        <option value="scarcity">Scarcity (Click Limited)</option>
+                                        <option value="split">Split (Even Alternate)</option>
+                                    </select>
+                                    <p style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.5rem' }}>
+                                        {rotatorConfig.type === 'sequential' && "Offers rotate in the fixed order defined on the right."}
+                                        {rotatorConfig.type === 'random' && "Offers are selected randomly based on their weights."}
+                                        {rotatorConfig.type === 'scarcity' && "Traffic flows to the first available offer until its limit is hit."}
+                                        {rotatorConfig.type === 'split' && "Traffic is distributed based on the number of appearances set per offer."}
+                                    </p>
+                                </div>
+
+                                <div>
+                                    <label className="db-label">Fallback Behavior</label>
+                                    <select
+                                        className="db-input"
+                                        value={rotatorConfig.fallbackBehavior}
+                                        onChange={e => updateConfig({ fallbackBehavior: e.target.value as FallbackBehavior })}
+                                    >
+                                        <option value="default">Branded Default Page</option>
+                                        <option value="link">Custom URL Redirect</option>
+                                        <option value="expired">"Offer Expired" Notice</option>
+                                    </select>
+                                </div>
+
+                                {rotatorConfig.fallbackBehavior === 'link' && (
+                                    <div className="db-form-group">
+                                        <label className="db-label">Custom Redirect URL</label>
+                                        <input
+                                            type="url"
+                                            className="db-input"
+                                            placeholder="https://yourbrand.com/special"
+                                            value={rotatorConfig.customLink || ''}
+                                            onChange={e => updateConfig({ customLink: e.target.value })}
+                                        />
+                                    </div>
+                                )}
+
+                                <div style={{ marginTop: 'auto', background: '#f8fafc', padding: '1rem', borderRadius: '0.75rem' }}>
+                                    <h4 style={{ fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', marginBottom: '0.5rem' }}>Engine Stats</h4>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                                        <span>Active Offers:</span>
+                                        <span style={{ fontWeight: 700 }}>{mockOffers.filter(o => o.isActive).length}</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                                        <span>Total Capacity:</span>
+                                        <span style={{ fontWeight: 700 }}>Inf.</span>
+                                    </div>
                                 </div>
                             </div>
+
+                            {/* Right: Sequence & Constraints */}
                             <div>
-                                <h4 style={{ fontSize: '0.9rem', marginBottom: '1rem', fontWeight: 800 }}>Available for Batch Add</h4>
-                                <div className="db-form-group" style={{ marginBottom: '1rem' }}>
-                                    <input type="text" className="db-input" placeholder="Search unassigned merchants..." style={{ fontSize: '0.8rem' }} />
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                    <h4 style={{ fontSize: '0.9rem', fontWeight: 800, margin: 0 }}>Delivery Sequence</h4>
+                                    <button
+                                        className="db-btn"
+                                        style={{ padding: '0.25rem 0.6rem', fontSize: '0.7rem', background: showAddOfferPanel ? '#f1f5f9' : '#2563eb', color: showAddOfferPanel ? '#64748b' : '#fff' }}
+                                        onClick={() => setShowAddOfferPanel(!showAddOfferPanel)}
+                                    >
+                                        {showAddOfferPanel ? 'Close Panel' : '+ Add Asset'}
+                                    </button>
                                 </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '240px', overflowY: 'auto' }}>
-                                    {[
-                                        { name: 'FitLife Gym', id: 'm-102' },
-                                        { name: 'Brew & Bake', id: 'm-105' }
-                                    ].map((m, i) => (
-                                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', border: '1px solid #f1f5f9', borderRadius: '0.5rem' }}>
-                                            <div style={{ fontSize: '0.8rem' }}>{m.name}</div>
-                                            <button className="db-btn db-btn-primary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.7rem' }}>Add</button>
+
+                                {showAddOfferPanel && (
+                                    <div className="animate-fade-in" style={{ background: '#f8fafc', padding: '1rem', borderRadius: '1rem', border: '1px solid #e2e8f0', marginBottom: '1.5rem' }}>
+                                        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                                            <input
+                                                type="text"
+                                                className="db-input"
+                                                style={{ fontSize: '0.8rem', padding: '0.5rem' }}
+                                                placeholder="Search Offer or Business..."
+                                                value={offerSearchTerm}
+                                                onChange={e => setOfferSearchTerm(e.target.value)}
+                                            />
+                                        </div>
+
+                                        <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                            {/* Results: Businesses */}
+                                            {Array.from(new Set(mockOffers.map(o => o.businessName))).filter(b => b.toLowerCase().includes(offerSearchTerm.toLowerCase())).slice(0, 3).map(business => (
+                                                <div key={business} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0' }}>
+                                                    <div>
+                                                        <div style={{ fontSize: '0.75rem', fontWeight: 800 }}>🏢 {business}</div>
+                                                        <div style={{ fontSize: '0.65rem', color: '#64748b' }}>Add all approved offers</div>
+                                                    </div>
+                                                    <button className="db-btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem' }} onClick={() => addBusinessToRotator(business)}>Add All</button>
+                                                </div>
+                                            ))}
+
+                                            {/* Results: Offers */}
+                                            {mockOffers.filter(o => o.status === 'approved' && (o.headline.toLowerCase().includes(offerSearchTerm.toLowerCase()) || o.businessName.toLowerCase().includes(offerSearchTerm.toLowerCase())) && !rotatorConfig.offerSequence.includes(o.id)).slice(0, 6).map(offer => (
+                                                <div key={offer.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', padding: '0.5rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0' }}>
+                                                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                                                        <img src={offer.imageUrl} style={{ width: '24px', height: '24px', borderRadius: '4px' }} alt="" />
+                                                        <div>
+                                                            <div style={{ fontSize: '0.75rem', fontWeight: 800 }}>{offer.headline}</div>
+                                                            <div style={{ fontSize: '0.6rem', color: '#64748b' }}>{offer.businessName}</div>
+                                                        </div>
+                                                    </div>
+                                                    <button className="db-btn db-btn-primary" style={{ padding: '0.2rem 0.5rem', fontSize: '0.65rem' }} onClick={() => addOfferToRotator(offer.id)}>Add Offer</button>
+                                                </div>
+                                            ))}
+
+                                            {offerSearchTerm && mockOffers.filter(o => o.status === 'approved' && o.headline.toLowerCase().includes(offerSearchTerm.toLowerCase())).length === 0 && (
+                                                <div style={{ textAlign: 'center', padding: '1rem', fontSize: '0.75rem', color: '#94a3b8' }}>No matches found.</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '400px', overflowY: 'auto', paddingRight: '0.5rem' }}>
+                                    {getOrderedOffers().map((offer, i) => (
+                                        <div key={offer.id} style={{
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            padding: '1rem',
+                                            background: '#fff',
+                                            border: '1px solid #e2e8f0',
+                                            borderRadius: '0.75rem',
+                                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1 }}>
+                                                <div style={{
+                                                    width: '24px',
+                                                    height: '24px',
+                                                    borderRadius: '50%',
+                                                    background: '#f1f5f9',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    fontSize: '0.75rem',
+                                                    fontWeight: 900,
+                                                    color: '#64748b'
+                                                }}>{i + 1}</div>
+                                                <div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                        <div style={{ fontSize: '0.85rem', fontWeight: 800 }}>{offer.businessName}</div>
+                                                        <span
+                                                            onClick={() => handleTogglePremium(offer.id)}
+                                                            title="Toggle Hyperlocal / Local Status"
+                                                            style={{
+                                                                cursor: 'pointer',
+                                                                background: offer.isPremium ? 'linear-gradient(135deg, #eab308, #d97706)' : '#e2e8f0',
+                                                                color: offer.isPremium ? '#fff' : '#64748b',
+                                                                fontSize: '0.6rem',
+                                                                fontWeight: 900,
+                                                                padding: '2px 6px',
+                                                                borderRadius: '4px',
+                                                                textTransform: 'uppercase',
+                                                                boxShadow: offer.isPremium ? '0 2px 4px rgba(234, 179, 8, 0.3)' : 'none',
+                                                                transition: 'all 0.2s'
+                                                            }}
+                                                        >
+                                                            {offer.isPremium ? 'Hyperlocal' : 'Local'}
+                                                        </span>
+                                                    </div>
+                                                    <div style={{ fontSize: '0.7rem', color: '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px' }}>
+                                                        {offer.headline}
+                                                    </div>
+                                                    <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem' }}>
+                                                        <span style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 700 }}>
+                                                            👁️ {(offer.performance.scans + getOfferStats(offer.id).scans).toLocaleString()} Scans
+                                                        </span>
+                                                        <span style={{ fontSize: '0.65rem', color: '#10b981', fontWeight: 700 }}>
+                                                            ✅ {(offer.performance.claims + getOfferStats(offer.id).clicks).toLocaleString()} Clicks
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                                {/* Type Specific Inputs */}
+                                                {(rotatorConfig.type === 'random' || rotatorConfig.type === 'split') && (
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#f1f5f9', padding: '0.25rem 0.6rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0' }}>
+                                                        <span style={{ fontSize: '0.7rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>
+                                                            {rotatorConfig.type === 'random' ? 'Weight:' : 'Appearances:'}
+                                                        </span>
+                                                        <input
+                                                            type="number"
+                                                            className="db-input"
+                                                            style={{ width: '45px', padding: '0.2rem 0.3rem', fontSize: '0.75rem', fontWeight: 800, textAlign: 'center', background: '#fff' }}
+                                                            min="1"
+                                                            value={rotatorConfig.weights[offer.id] || 1}
+                                                            title={rotatorConfig.type === 'random' ? 'Probability weight' : 'Number of times this offer appears in sequence'}
+                                                            onChange={e => updateConfig({
+                                                                weights: { ...rotatorConfig.weights, [offer.id]: parseInt(e.target.value) || 1 }
+                                                            })}
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                {rotatorConfig.type === 'scarcity' && (
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                        <span style={{ fontSize: '0.7rem', fontWeight: 700 }}>Limit:</span>
+                                                        <input
+                                                            type="number"
+                                                            className="db-input"
+                                                            style={{ width: '60px', padding: '0.25rem' }}
+                                                            min="0"
+                                                            placeholder="∞"
+                                                            value={rotatorConfig.scarcityLimits[offer.id] || ''}
+                                                            onChange={e => updateConfig({
+                                                                scarcityLimits: { ...rotatorConfig.scarcityLimits, [offer.id]: parseInt(e.target.value) || 0 }
+                                                            })}
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                {/* Reordering Buttons */}
+                                                <div style={{ display: 'flex', gap: '0.25rem' }}>
+                                                    <button
+                                                        className="db-btn db-btn-ghost"
+                                                        style={{ padding: '0.25rem' }}
+                                                        disabled={i === 0}
+                                                        onClick={() => moveOffer(i, 'up')}
+                                                    >
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m18 15-6-6-6 6" /></svg>
+                                                    </button>
+                                                    <button
+                                                        className="db-btn db-btn-ghost"
+                                                        style={{ padding: '0.25rem' }}
+                                                        disabled={i === getOrderedOffers().length - 1}
+                                                        onClick={() => moveOffer(i, 'down')}
+                                                    >
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+                                                    </button>
+                                                    <button
+                                                        className="db-btn db-btn-ghost"
+                                                        style={{ padding: '0.25rem', color: '#ef4444' }}
+                                                        title="Remove from sequence"
+                                                        onClick={() => removeOfferFromRotator(offer.id)}
+                                                    >
+                                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                                                    </button>
+                                                </div>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
                             </div>
                         </div>
-                        <div className="db-modal-footer" style={{ justifyContent: 'space-between' }}>
-                            <button className="db-btn db-btn-ghost" style={{ color: '#ef4444', borderColor: '#fee2e2' }} onClick={() => { if (confirm('Are you sure? This will archive the location and its rotator.')) setIsManageModalOpen(false) }}>Soft Delete Location</button>
-                            <div style={{ display: 'flex', gap: '0.75rem' }}>
-                                <button className="db-btn db-btn-ghost" onClick={() => setIsManageModalOpen(false)}>Close</button>
-                                <button className="db-btn db-btn-primary" onClick={() => setIsManageModalOpen(false)}>Save Hub Config</button>
+                        <div className="db-modal-footer">
+                            <button className="db-btn db-btn-ghost" onClick={() => setIsManageModalOpen(false)}>Discard</button>
+                            <button className="db-btn db-btn-primary" onClick={handleSaveConfig}>Save Rotator Profile</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* QR Download Modal */}
+            {isQRModalOpen && selectedQRLocation && (
+                <div className="db-modal-overlay">
+                    <div className="db-modal" style={{ maxWidth: '450px', textAlign: 'center' }}>
+                        <div className="db-modal-header">
+                            <div>
+                                <h3 className="db-card-title">Production QR Asset</h3>
+                                <p style={{ fontSize: '0.75rem', color: '#64748b', margin: 0 }}>Hub ID: {selectedQRLocation.id}</p>
+                            </div>
+                            <button onClick={() => setIsQRModalOpen(false)} className="db-btn-close">&times;</button>
+                        </div>
+                        <div className="db-modal-content" style={{ padding: '2rem' }}>
+                            <div style={{
+                                background: '#fff',
+                                padding: '1.5rem',
+                                borderRadius: '1.25rem',
+                                border: '2px solid #f1f5f9',
+                                display: 'inline-block',
+                                marginBottom: '1.5rem',
+                                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)'
+                            }}>
+                                <img
+                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(window.location.origin + '/r/' + selectedQRLocation.id)}`}
+                                    alt="QR Code Large"
+                                    style={{ width: '250px', height: '250px', display: 'block' }}
+                                />
+                            </div>
+                            <h4 style={{ fontWeight: 800, marginBottom: '0.5rem' }}>{selectedQRLocation.name}</h4>
+                            <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '2rem' }}>
+                                This QR code links directly to the sequence engine for this location.
+                                Download it for use in physical storefronts or NFC tags.
+                            </p>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                <a
+                                    href={`/r/${selectedQRLocation.id}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="db-btn db-btn-ghost"
+                                    style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                                >
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>
+                                    Test Link
+                                </a>
+                                <button
+                                    className="db-btn db-btn-primary"
+                                    onClick={() => downloadQR(selectedQRLocation)}
+                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                                >
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                                    Download PNG
+                                </button>
                             </div>
                         </div>
                     </div>

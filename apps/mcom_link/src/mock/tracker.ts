@@ -14,10 +14,15 @@ export interface TrackingEvent {
     metadata?: Record<string, string>
 }
 
-// In-memory event log (production: database/analytics service)
-const eventLog: TrackingEvent[] = []
+// In-memory event log backed by localStorage
+const getStoredEvents = (): TrackingEvent[] => {
+    const stored = localStorage.getItem('mcom_event_log')
+    return stored ? JSON.parse(stored) : []
+}
 
-let eventCounter = 0
+let eventLog: TrackingEvent[] = getStoredEvents()
+
+let eventCounter = eventLog.length
 
 function generateEventId(): string {
     eventCounter++
@@ -58,6 +63,7 @@ export function trackEvent(
     }
 
     eventLog.push(event)
+    localStorage.setItem('mcom_event_log', JSON.stringify(eventLog))
 
     // Console log in dev for visibility (invisible in production)
     if (import.meta.env.DEV) {
@@ -70,6 +76,15 @@ export function trackEvent(
  */
 export function getEventLog(): TrackingEvent[] {
     return [...eventLog]
+}
+
+/**
+ * Get specific stats for an offer
+ */
+export function getOfferStats(offerId: string) {
+    const scans = eventLog.filter(e => e.offerId === offerId && e.type === 'scan').length
+    const clicks = eventLog.filter(e => e.offerId === offerId && (e.type === 'cta_click' || e.type === 'offer_view')).length
+    return { scans, clicks }
 }
 
 /**

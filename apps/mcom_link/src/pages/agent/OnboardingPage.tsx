@@ -10,11 +10,37 @@ export default function OnboardingPage() {
         email: '',
         location: '',
         assignedZone: 'High Street',
-        planType: 'Basic'
+        planType: 'Basic',
+        postalCode: '',
+        address: ''
     })
+    const [isSearchingPostcode, setIsSearchingPostcode] = useState(false)
 
     const handleNext = () => setStep(step + 1)
     const handleBack = () => setStep(step - 1)
+    const handlePostcodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const pc = e.target.value.toUpperCase()
+        setFormData({ ...formData, postalCode: pc })
+
+        // Simulate UK Address Lookup (e.g. SW1A 1AA)
+        if (pc.length >= 5) {
+            setIsSearchingPostcode(true)
+            setTimeout(() => {
+                const mockAddresses: Record<string, string> = {
+                    'SW1A 1AA': 'Buckingham Palace, London',
+                    'E1 6AN': '10 Spital Square, London',
+                    'M1 1AG': '1 Picadilly Gardens, Manchester',
+                    'B1 1BB': 'Council House, Victoria Square, Birmingham'
+                }
+                setFormData(prev => ({
+                    ...prev,
+                    address: mockAddresses[pc] || `${Math.floor(Math.random() * 100) + 1} High Street, ${prev.assignedZone}`
+                }))
+                setIsSearchingPostcode(false)
+            }, 800)
+        }
+    }
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault()
         // Simulate delay for a more 'premium' feel
@@ -89,15 +115,43 @@ export default function OnboardingPage() {
                                     <label className="db-label">Merchant Login Email</label>
                                     <input type="email" className="db-input" placeholder="hello@business.com" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} />
                                 </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '1rem' }}>
-                                    <div className="db-form-group">
-                                        <label className="db-label">Zone / Location</label>
-                                        <select className="db-input" value={formData.assignedZone} onChange={e => setFormData({ ...formData, assignedZone: e.target.value })}>
-                                            <option value="High Street">High Street Central</option>
-                                            <option value="Mall North">Mall North Wing</option>
-                                            <option value="East Plaza">East Plaza Square</option>
-                                        </select>
+                                <div className="db-form-group">
+                                    <label className="db-label">Business Postal Code</label>
+                                    <div style={{ position: 'relative' }}>
+                                        <input
+                                            type="text"
+                                            className="db-input"
+                                            placeholder="e.g. SW1A 1AA"
+                                            value={formData.postalCode}
+                                            onChange={handlePostcodeChange}
+                                        />
+                                        {isSearchingPostcode && (
+                                            <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)' }}>
+                                                <div className="sf-spinner-ring" style={{ width: '16px', height: '16px', borderTopColor: '#2563eb' }}></div>
+                                            </div>
+                                        )}
                                     </div>
+                                    <small className="db-help">Entering a valid UK postcode will auto-fill the business address below.</small>
+                                </div>
+
+                                <div className="db-form-group">
+                                    <label className="db-label">Assigned Zone / Location</label>
+                                    <select className="db-input" value={formData.assignedZone} onChange={e => setFormData({ ...formData, assignedZone: e.target.value })}>
+                                        <option value="High Street Central">High Street Central</option>
+                                        <option value="Mall North Wing">Mall North Wing</option>
+                                        <option value="East Plaza Square">East Plaza Square</option>
+                                    </select>
+                                </div>
+                                <div className="db-form-group">
+                                    <label className="db-label">Verified Business Address</label>
+                                    <textarea
+                                        className="db-input"
+                                        rows={2}
+                                        readOnly
+                                        placeholder="Address will auto-populate from UK postcode..."
+                                        value={formData.address}
+                                        style={{ background: '#f8fafc', color: '#64748b', resize: 'none' }}
+                                    />
                                 </div>
                                 <button className="db-btn db-btn-primary" style={{ marginTop: '1rem', height: '52px', justifyContent: 'center' }} onClick={handleNext}>
                                     Select Plan & Visibility
@@ -197,7 +251,8 @@ export default function OnboardingPage() {
                                 <span style={{ color: '#64748b', fontSize: '0.85rem' }}>Merchant:</span>
                                 <div style={{ textAlign: 'right' }}>
                                     <div style={{ fontWeight: 900, fontSize: '1rem' }}>{formData.businessName}</div>
-                                    <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{formData.assignedZone}</div>
+                                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{formData.address}</div>
+                                    <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 700 }}>{formData.postalCode} • {formData.assignedZone}</div>
                                 </div>
                             </div>
                             <div style={{ width: '100%', height: '1px', background: '#e2e8f0' }} />
@@ -256,7 +311,7 @@ export default function OnboardingPage() {
                             <button className="db-btn db-btn-ghost" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setStep(1)}>Back to Dashboard</button>
                             <button className="db-btn db-btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => {
                                 setFormData({
-                                    businessName: '', contactPerson: '', phone: '', email: '', location: '', assignedZone: 'High Street', planType: 'Basic'
+                                    businessName: '', contactPerson: '', phone: '', email: '', location: '', assignedZone: 'High Street Central', planType: 'Basic', postalCode: '', address: ''
                                 });
                                 setStep(1);
                             }}>

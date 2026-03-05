@@ -10,29 +10,23 @@ export interface Location {
 }
 
 export const mockLocations: Location[] = [
-    {
-        id: 'high-street-001',
-        name: 'High Street Central',
-        campaignName: 'Spring High Street Campaign',
-        address: '12 High Street, London EC1A',
-        isActive: true,
-    },
-    {
-        id: 'market-square-002',
-        name: 'Market Square',
-        campaignName: 'Market Square Deals',
-        address: '5 Market Square, London WC2',
-        isActive: true,
-    },
-    {
-        id: 'broadway-003',
-        name: 'Broadway Corner',
-        campaignName: 'Broadway Winter Warmers',
-        address: '88 Broadway, London SW1',
-        isActive: true,
-    },
+    { id: 'loc-001', name: 'High Street Central', campaignName: 'Spring High Street Campaign', address: 'London, UK', isActive: true },
+    { id: 'loc-002', name: 'Mall North Wing', campaignName: 'Mall Exclusives', address: 'London, UK', isActive: true },
+    { id: 'loc-003', name: 'East Plaza Square', campaignName: 'Plaza Deals', address: 'Manchester, UK', isActive: false },
+    { id: 'loc-004', name: 'West End Hub', campaignName: 'West End Highlights', address: 'Birmingham, UK', isActive: true },
 ]
 
 export function getLocationById(id: string): Location | undefined {
-    return mockLocations.find((loc) => loc.id === id)
+    const loc = mockLocations.find((loc) => loc.id === id)
+    // Dynamic fallback for newly created locations in the UI
+    if (!loc) {
+        return {
+            id,
+            name: `Hub ${id}`,
+            campaignName: 'Active Campaign',
+            address: 'UK',
+            isActive: true
+        }
+    }
+    return loc
 }

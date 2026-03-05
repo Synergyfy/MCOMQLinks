@@ -6,6 +6,19 @@ export default function AdminOfferManager() {
     const [offers, setOffers] = useState(mockOffers)
     const [filter, setFilter] = useState('all')
     const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+    const [uploadMode, setUploadMode] = useState<'url' | 'file'>('url')
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (file) {
+            const url = URL.createObjectURL(file)
+            if (newOffer.mediaType === 'image') {
+                setNewOffer({ ...newOffer, imageUrl: url })
+            } else {
+                setNewOffer({ ...newOffer, videoUrl: url })
+            }
+        }
+    }
 
     // Form state for new offer
     const [newOffer, setNewOffer] = useState({
@@ -14,11 +27,16 @@ export default function AdminOfferManager() {
         description: '',
         ctaType: 'claim' as any,
         ctaValue: '', // Added dynamic value field
+        mediaType: 'image' as 'image' | 'video',
+        imageUrl: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=600&h=400&fit=crop',
+        videoUrl: '',
         startDate: '',
         endDate: '',
         location: 'High Street Central',
         isPremium: false,
-        season: 'all' as any
+        season: 'all' as any,
+        visibility: 'national' as 'national' | 'hyperlocal',
+        targetPostcode: ''
     })
 
     const filteredOffers = filter === 'all' ? offers : offers.filter(o => o.status === filter)
@@ -56,11 +74,16 @@ export default function AdminOfferManager() {
             description: '',
             ctaType: 'claim',
             ctaValue: '',
+            mediaType: 'image',
+            imageUrl: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=600&h=400&fit=crop',
+            videoUrl: '',
             startDate: '',
             endDate: '',
             location: 'High Street Central',
             isPremium: false,
-            season: 'all'
+            season: 'all',
+            visibility: 'national',
+            targetPostcode: ''
         })
     }
 
@@ -143,7 +166,7 @@ export default function AdminOfferManager() {
                     <div className="db-modal">
                         <div className="db-modal-header">
                             <h3 className="db-card-title">Create Global Campaign Offer</h3>
-                            <button onClick={() => setIsAddModalOpen(false)} className="db-btn-close">&times;</button>
+                            <button onClick={() => { setIsAddModalOpen(false); setUploadMode('url'); }} className="db-btn-close">&times;</button>
                         </div>
                         <form onSubmit={handleAddOffer}>
                             <div className="db-modal-content">
@@ -159,7 +182,44 @@ export default function AdminOfferManager() {
                                         </div>
                                         <div className="db-form-group">
                                             <label className="db-label">Short Description</label>
-                                            <textarea className="db-input" required style={{ height: '80px', resize: 'none' }} placeholder="Max 150 characters..." value={newOffer.description} onChange={e => setNewOffer({ ...newOffer, description: e.target.value })} />
+                                            <textarea className="db-input" required style={{ height: '60px', resize: 'none' }} placeholder="Max 150 characters..." value={newOffer.description} onChange={e => setNewOffer({ ...newOffer, description: e.target.value })} />
+                                        </div>
+
+                                        <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                                <label className="db-label" style={{ margin: 0 }}>Offer Visual</label>
+                                                <div style={{ display: 'flex', gap: '0.25rem', padding: '0.15rem', background: '#e2e8f0', borderRadius: '0.4rem' }}>
+                                                    <button type="button" onClick={() => setUploadMode('url')} style={{ padding: '0.15rem 0.4rem', border: 'none', background: uploadMode === 'url' ? '#fff' : 'transparent', borderRadius: '0.3rem', fontSize: '0.6rem', fontWeight: 800, cursor: 'pointer' }}>🔗 Link</button>
+                                                    <button type="button" onClick={() => setUploadMode('file')} style={{ padding: '0.15rem 0.4rem', border: 'none', background: uploadMode === 'file' ? '#fff' : 'transparent', borderRadius: '0.3rem', fontSize: '0.6rem', fontWeight: 800, cursor: 'pointer' }}>📁 File</button>
+                                                </div>
+                                            </div>
+
+                                            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                                                <button type="button" onClick={() => setNewOffer({ ...newOffer, mediaType: 'image' })} className={`db-btn ${newOffer.mediaType === 'image' ? 'db-btn-primary' : 'db-btn-ghost'}`} style={{ flex: 1, padding: '0.25rem' }}>📷 Image</button>
+                                                <button type="button" onClick={() => setNewOffer({ ...newOffer, mediaType: 'video' })} className={`db-btn ${newOffer.mediaType === 'video' ? 'db-btn-primary' : 'db-btn-ghost'}`} style={{ flex: 1, padding: '0.25rem' }}>🎥 Video</button>
+                                            </div>
+
+                                            {uploadMode === 'url' ? (
+                                                <input
+                                                    type="url"
+                                                    className="db-input"
+                                                    required
+                                                    placeholder={newOffer.mediaType === 'image' ? "Image URL..." : "Video URL..."}
+                                                    value={newOffer.mediaType === 'image' ? newOffer.imageUrl : newOffer.videoUrl}
+                                                    onChange={e => setNewOffer(prev => newOffer.mediaType === 'image' ? { ...prev, imageUrl: e.target.value } : { ...prev, videoUrl: e.target.value })}
+                                                />
+                                            ) : (
+                                                <label className="db-input" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', cursor: 'pointer', background: '#fff', border: '1px dashed #cbd5e1', padding: '0.5rem' }}>
+                                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+                                                    <span style={{ fontSize: '0.75rem', fontWeight: 700 }}>{newOffer.mediaType === 'image' ? 'Upload Image' : 'Upload Video'}</span>
+                                                    <input
+                                                        type="file"
+                                                        accept={newOffer.mediaType === 'image' ? "image/*" : "video/*"}
+                                                        style={{ display: 'none' }}
+                                                        onChange={handleFileUpload}
+                                                    />
+                                                </label>
+                                            )}
                                         </div>
                                         <div className="db-form-group">
                                             <label className="db-label">CTA Type</label>
@@ -199,6 +259,7 @@ export default function AdminOfferManager() {
                                                 <input type="date" className="db-input" required value={newOffer.endDate} onChange={e => setNewOffer({ ...newOffer, endDate: e.target.value })} />
                                             </div>
                                         </div>
+
                                         <div className="db-form-group">
                                             <label className="db-label">Assigned Location</label>
                                             <select className="db-input" value={newOffer.location} onChange={e => setNewOffer({ ...newOffer, location: e.target.value })}>
@@ -208,16 +269,61 @@ export default function AdminOfferManager() {
                                                 <option>West End Hub</option>
                                             </select>
                                         </div>
+
                                         <div className="db-form-group">
                                             <label className="db-label">Seasonal Automation</label>
                                             <select className="db-input" value={newOffer.season} onChange={e => setNewOffer({ ...newOffer, season: e.target.value as any })}>
-                                                <option value="all">Always Active (Default)</option>
+                                                <option value="all">Evergreen (Default)</option>
                                                 <option value="winter">Winter Campaign</option>
                                                 <option value="spring">Spring Campaign</option>
                                                 <option value="summer">Summer Campaign</option>
                                                 <option value="autumn">Autumn Campaign</option>
                                             </select>
                                         </div>
+
+                                        <div style={{ padding: '1.25rem', background: '#f0f9ff', borderRadius: '1rem', border: '1px solid #bae6fd' }}>
+                                            <label className="db-label">Campaign Visibility</label>
+                                            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setNewOffer({ ...newOffer, visibility: 'national' })}
+                                                    className={`db-btn ${newOffer.visibility === 'national' ? 'db-btn-primary' : 'db-btn-ghost'}`}
+                                                    style={{ flex: 1, padding: '0.5rem', fontSize: '0.75rem' }}
+                                                >
+                                                    🌐 National
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setNewOffer({ ...newOffer, visibility: 'hyperlocal' })}
+                                                    className={`db-btn ${newOffer.visibility === 'hyperlocal' ? 'db-btn-primary' : 'db-btn-ghost'}`}
+                                                    style={{ flex: 1, padding: '0.5rem', fontSize: '0.75rem' }}
+                                                >
+                                                    📍 Hyperlocal
+                                                </button>
+                                            </div>
+
+                                            {newOffer.visibility === 'hyperlocal' ? (
+                                                <div className="animate-fade-in">
+                                                    <label className="db-label">Target Area (Postcode)</label>
+                                                    <input
+                                                        type="text"
+                                                        className="db-input"
+                                                        placeholder="e.g. W1F 0AA"
+                                                        value={newOffer.targetPostcode}
+                                                        onChange={e => setNewOffer({ ...newOffer, targetPostcode: e.target.value.toUpperCase() })}
+                                                        required
+                                                    />
+                                                    <p style={{ fontSize: '0.65rem', color: '#0369a1', marginTop: '0.5rem', lineHeight: '1.4' }}>
+                                                        <strong>Radius Rule:</strong> This offer will only appear on digital billboards within a 5-mile radius of this postcode.
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                <p style={{ fontSize: '0.65rem', color: '#64748b', margin: 0 }}>
+                                                    National offers appear across all standard rotator hubs in the country.
+                                                </p>
+                                            )}
+                                        </div>
+
                                         <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '1rem' }}>
                                             <input type="checkbox" id="premium-toggle" checked={newOffer.isPremium} onChange={e => setNewOffer({ ...newOffer, isPremium: e.target.checked })} style={{ width: '18px', height: '18px' }} />
                                             <div>
@@ -233,9 +339,10 @@ export default function AdminOfferManager() {
                                 <button type="submit" className="db-btn db-btn-primary">Provision Global Offer</button>
                             </div>
                         </form>
-                    </div>
-                </div>
-            )}
-        </AdminLayout>
+                    </div >
+                </div >
+            )
+            }
+        </AdminLayout >
     )
 }

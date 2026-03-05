@@ -7,16 +7,28 @@ interface OfferCardProps {
     offer: Offer
 }
 
-export default function OfferCard({ offer }: OfferCardProps) {
+export default function OfferCard({ offer }: Readonly<OfferCardProps>) {
     return (
         <div className="sf-offer-card">
             <div className="sf-offer-image-wrapper">
-                <img
-                    src={offer.imageUrl}
-                    alt={offer.headline}
-                    className="sf-offer-image"
-                    loading="eager"
-                />
+                {offer.mediaType === 'video' ? (
+                    <video
+                        src={offer.videoUrl}
+                        className="sf-offer-image"
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        style={{ objectFit: 'cover' }}
+                    />
+                ) : (
+                    <img
+                        src={offer.imageUrl}
+                        alt={offer.headline}
+                        className="sf-offer-image"
+                        loading="eager"
+                    />
+                )}
                 {offer.isPremium && (
                     <div className="sf-premium-badge">⭐ Featured</div>
                 )}

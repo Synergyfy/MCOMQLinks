@@ -7,6 +7,19 @@ import OfferCard from '../../components/OfferCard'
 export default function OffersPage() {
     const [filter, setFilter] = useState('all')
     const [showModal, setShowModal] = useState(false)
+    const [uploadMode, setUploadMode] = useState<'url' | 'file'>('url')
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (file) {
+            const url = URL.createObjectURL(file)
+            if (newOffer.mediaType === 'image') {
+                setNewOffer({ ...newOffer, imageUrl: url })
+            } else {
+                setNewOffer({ ...newOffer, videoUrl: url })
+            }
+        }
+    }
 
     // New Offer Form State
     const [newOffer, setNewOffer] = useState<Partial<Offer>>({
@@ -16,12 +29,17 @@ export default function OffersPage() {
         ctaLabel: 'Claim This Offer',
         redirectUrl: '',
         redemptionCode: '',
+        mediaType: 'image',
         imageUrl: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=600&h=400&fit=crop',
+        videoUrl: '',
         startDate: new Date().toISOString().split('T')[0],
         endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         businessName: mockBusiness.name,
         isPremium: false,
-        season: 'all'
+        season: 'all',
+        visibility: 'national',
+        targetPostcode: '',
+        redemptionInstructions: ''
     })
 
     const myOffers = mockOffers.filter(o => o.businessName === mockBusiness.name)
@@ -29,8 +47,17 @@ export default function OffersPage() {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault()
-        alert("Offer submitted for approval! Our team will review it within 24 hours.")
+
+        if (newOffer.visibility === 'hyperlocal') {
+            const msg = `Hyperlocal Offer Detected!\n\nPostcode: ${newOffer.targetPostcode}\nRadius: 5 Miles\n\nSystem is checking for existing hubs within 5 miles... None found near ${newOffer.targetPostcode}.\n\n✅ AUTO-PROVISIONING: A new Radius Hub has been created for your business location!`
+            alert(msg)
+        } else {
+            alert("Offer submitted for approval! Our team will review it within 24 hours.")
+        }
+
         setShowModal(false)
+        setUploadMode('url')
+        setNewOffer({ ...newOffer, headline: '', description: '', visibility: 'national', targetPostcode: '' })
     }
 
     return (
@@ -73,11 +100,24 @@ export default function OffersPage() {
                                 <tr key={offer.id}>
                                     <td>
                                         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                                            <img
-                                                src={offer.imageUrl}
-                                                alt={offer.headline}
-                                                style={{ width: '48px', height: '48px', borderRadius: '0.5rem', objectFit: 'cover' }}
-                                            />
+                                            <div style={{ position: 'relative' }}>
+                                                {offer.mediaType === 'video' ? (
+                                                    <div style={{ width: '48px', height: '48px', borderRadius: '0.5rem', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff" stroke="currentColor" strokeWidth="2"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+                                                    </div>
+                                                ) : (
+                                                    <img
+                                                        src={offer.imageUrl}
+                                                        alt={offer.headline}
+                                                        style={{ width: '48px', height: '48px', borderRadius: '0.5rem', objectFit: 'cover' }}
+                                                    />
+                                                )}
+                                                {offer.mediaType === 'video' && (
+                                                    <div style={{ position: 'absolute', bottom: '-4px', right: '-4px', background: '#2563eb', borderRadius: '50%', padding: '2px' }}>
+                                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3"><path d="M23 7l-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>
+                                                    </div>
+                                                )}
+                                            </div>
                                             <div>
                                                 <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>{offer.headline}</div>
                                                 <div style={{ fontSize: '0.75rem', color: '#64748b' }}>ID: {offer.id}</div>
@@ -150,7 +190,7 @@ export default function OffersPage() {
                     <div className="db-modal" onClick={e => e.stopPropagation()}>
                         <div className="db-modal-header">
                             <h2 className="db-card-title">Create New Campaign</h2>
-                            <button className="db-btn-close" onClick={() => setShowModal(false)}>&times;</button>
+                            <button className="db-btn-close" onClick={() => { setShowModal(false); setUploadMode('url'); }}>&times;</button>
                         </div>
 
                         <div className="db-modal-content">
@@ -173,12 +213,69 @@ export default function OffersPage() {
                                         <label className="db-label">Offer Description</label>
                                         <textarea
                                             className="db-input"
-                                            style={{ height: '80px', resize: 'none' }}
+                                            style={{ height: '60px', resize: 'none' }}
                                             placeholder="Details about the offer..."
                                             value={newOffer.description}
                                             onChange={(e) => setNewOffer({ ...newOffer, description: e.target.value })}
                                             required
                                         ></textarea>
+                                    </div>
+
+
+                                    <div style={{ background: '#f8fafc', padding: '1.25rem', borderRadius: '1rem', border: '1px solid #e2e8f0' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                            <label className="db-label" style={{ margin: 0 }}>Offer Visual (Image or Video)</label>
+                                            <div style={{ display: 'flex', gap: '0.25rem', padding: '0.2rem', background: '#e2e8f0', borderRadius: '0.5rem' }}>
+                                                <button type="button" onClick={() => setUploadMode('url')} style={{ padding: '0.25rem 0.5rem', border: 'none', background: uploadMode === 'url' ? '#fff' : 'transparent', borderRadius: '0.4rem', fontSize: '0.65rem', fontWeight: 800, cursor: 'pointer', transition: 'all 0.2s' }}>🔗 Link</button>
+                                                <button type="button" onClick={() => setUploadMode('file')} style={{ padding: '0.25rem 0.5rem', border: 'none', background: uploadMode === 'file' ? '#fff' : 'transparent', borderRadius: '0.4rem', fontSize: '0.65rem', fontWeight: 800, cursor: 'pointer', transition: 'all 0.2s' }}>📁 Upload</button>
+                                            </div>
+                                        </div>
+
+                                        <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.25rem' }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => setNewOffer({ ...newOffer, mediaType: 'image' })}
+                                                className={`db-btn ${newOffer.mediaType === 'image' ? 'db-btn-primary' : 'db-btn-ghost'}`}
+                                                style={{ flex: 1, padding: '0.5rem' }}
+                                            >
+                                                📷 Static Image
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setNewOffer({ ...newOffer, mediaType: 'video' })}
+                                                className={`db-btn ${newOffer.mediaType === 'video' ? 'db-btn-primary' : 'db-btn-ghost'}`}
+                                                style={{ flex: 1, padding: '0.5rem' }}
+                                            >
+                                                🎥 Motion Video
+                                            </button>
+                                        </div>
+
+                                        {uploadMode === 'url' ? (
+                                            <div className="db-form-group" style={{ margin: 0 }}>
+                                                <input
+                                                    type="url"
+                                                    className="db-input"
+                                                    placeholder={newOffer.mediaType === 'image' ? "Enter Image URL (e.g. Unsplash link)" : "Enter Video URL (MP4/YouTube)"}
+                                                    value={newOffer.mediaType === 'image' ? newOffer.imageUrl : newOffer.videoUrl}
+                                                    onChange={(e) => setNewOffer(prev => newOffer.mediaType === 'image' ? { ...prev, imageUrl: e.target.value } : { ...prev, videoUrl: e.target.value })}
+                                                    required
+                                                />
+                                            </div>
+                                        ) : (
+                                            <div className="db-form-group" style={{ margin: 0 }}>
+                                                <label className="db-input" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', cursor: 'pointer', background: '#fff', border: '2px dashed #cbd5e1' }}>
+                                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+                                                    <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{newOffer.mediaType === 'image' ? 'Upload Image' : 'Upload Video'}</span>
+                                                    <input
+                                                        type="file"
+                                                        accept={newOffer.mediaType === 'image' ? "image/*" : "video/*"}
+                                                        style={{ display: 'none' }}
+                                                        onChange={handleFileUpload}
+                                                    />
+                                                </label>
+                                            </div>
+                                        )}
+                                        {newOffer.mediaType === 'video' && <small className="db-help" style={{ color: '#2563eb', display: 'block', marginTop: '0.5rem' }}>Motion thumbnails increase engagement by 40%!</small>}
                                     </div>
 
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
@@ -220,17 +317,30 @@ export default function OffersPage() {
                                     )}
 
                                     {newOffer.ctaType === 'redeem' && (
-                                        <div className="db-form-group">
-                                            <label className="db-label">Promo Code</label>
-                                            <input
-                                                type="text"
-                                                className="db-input"
-                                                placeholder="e.g. SUMMER2026"
-                                                value={newOffer.redemptionCode}
-                                                onChange={(e) => setNewOffer({ ...newOffer, redemptionCode: e.target.value })}
-                                                required
-                                            />
-                                        </div>
+                                        <>
+                                            <div className="db-form-group">
+                                                <label className="db-label">Redemption Code</label>
+                                                <input
+                                                    type="text"
+                                                    className="db-input"
+                                                    placeholder="e.g. SUMMER25"
+                                                    value={newOffer.redemptionCode}
+                                                    onChange={(e) => setNewOffer({ ...newOffer, redemptionCode: e.target.value.toUpperCase() })}
+                                                    required
+                                                />
+                                            </div>
+                                            <div className="db-form-group">
+                                                <label className="db-label">Where to Use Instruction</label>
+                                                <textarea
+                                                    className="db-input"
+                                                    style={{ height: '60px', resize: 'none' }}
+                                                    placeholder="e.g. Present this code at the checkout counter or enter it on our website."
+                                                    value={newOffer.redemptionInstructions}
+                                                    onChange={(e) => setNewOffer({ ...newOffer, redemptionInstructions: e.target.value })}
+                                                    required
+                                                ></textarea>
+                                            </div>
+                                        </>
                                     )}
 
                                     {newOffer.ctaType === 'claim' && (

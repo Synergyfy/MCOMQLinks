@@ -46,7 +46,7 @@ export default function DashboardHome() {
                 </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.5rem', alignItems: 'start' }}>
+            <div className="db-grid-stack" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.5rem', alignItems: 'start' }}>
                 {/* 2. Live Offer Preview — PRD STEP 5 */}
                 <div className="db-card">
                     <div className="db-card-header">
@@ -55,11 +55,11 @@ export default function DashboardHome() {
                     </div>
 
                     {liveOffer ? (
-                        <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'flex-start' }}>
+                        <div className="db-grid-stack" style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '1.5rem', alignItems: 'flex-start' }}>
                             <img
                                 src={liveOffer.imageUrl}
                                 alt={liveOffer.headline}
-                                style={{ width: '180px', height: '120px', objectFit: 'cover', borderRadius: '0.75rem' }}
+                                style={{ width: '100%', maxWidth: '240px', aspectRatio: '16/9', objectFit: 'cover', borderRadius: '0.75rem' }}
                             />
                             <div style={{ flex: 1 }}>
                                 <div className="db-badge db-badge-approved" style={{ marginBottom: '0.5rem', display: 'inline-block' }}>Live</div>

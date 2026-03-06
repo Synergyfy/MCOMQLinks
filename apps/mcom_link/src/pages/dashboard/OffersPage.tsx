@@ -62,14 +62,14 @@ export default function OffersPage() {
 
     return (
         <DashboardLayout title="Offer Management">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
+                <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', paddingBottom: '0.5rem', maxWidth: '100%', whiteSpace: 'nowrap' }}>
                     {['all', 'approved', 'submitted', 'draft', 'rejected', 'expired'].map((s) => (
                         <button
                             key={s}
                             onClick={() => setFilter(s)}
                             className={`db-btn db-btn-ghost ${filter === s ? 'active' : ''}`}
-                            style={{ padding: '0.4rem 0.85rem', fontSize: '0.8rem', textTransform: 'capitalize' }}
+                            style={{ padding: '0.4rem 0.85rem', fontSize: '0.8rem', textTransform: 'capitalize', flexShrink: 0 }}
                         >
                             {s}
                         </button>
@@ -78,11 +78,11 @@ export default function OffersPage() {
 
                 <button className="db-btn db-btn-primary" onClick={() => setShowModal(true)}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                    Create New Offer
+                    Create Offer
                 </button>
             </div>
 
-            <div className="db-card" style={{ padding: 0 }}>
+            <div className="db-card desktop-only" style={{ padding: 0 }}>
                 <div className="db-table-wrapper">
                     <table className="db-table">
                         <thead>
@@ -171,6 +171,65 @@ export default function OffersPage() {
                 </div>
             </div>
 
+            <div className="mobile-only">
+                {filteredOffers.map((offer) => (
+                    <div key={offer.id} className="db-offer-card-mobile animate-fade-in">
+                        <div className="db-offer-card-mobile-header">
+                            <div style={{ position: 'relative' }}>
+                                {offer.mediaType === 'video' ? (
+                                    <div style={{ width: '60px', height: '60px', borderRadius: '0.75rem', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="#fff" stroke="currentColor" strokeWidth="2"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+                                    </div>
+                                ) : (
+                                    <img
+                                        src={offer.imageUrl}
+                                        alt={offer.headline}
+                                        style={{ width: '60px', height: '60px', borderRadius: '0.75rem', objectFit: 'cover' }}
+                                    />
+                                )}
+                            </div>
+                            <div className="db-offer-card-mobile-info">
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.25rem' }}>
+                                    <div style={{ fontWeight: 800, fontSize: '1rem', lineHeight: '1.2' }}>{offer.headline}</div>
+                                    <span className={`db-badge db-badge-${offer.status}`} style={{ fontSize: '0.65rem' }}>
+                                        {offer.status}
+                                    </span>
+                                </div>
+                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                    {new Date(offer.startDate).toLocaleDateString([], { month: 'short', day: 'numeric' })} - {new Date(offer.endDate).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="db-offer-card-mobile-stats">
+                            <div>
+                                <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Type</div>
+                                <div style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'capitalize' }}>{offer.ctaType}</div>
+                            </div>
+                            <div>
+                                <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Scans</div>
+                                <div style={{ fontSize: '0.85rem', fontWeight: 700 }}>{offer.performance.scans}</div>
+                            </div>
+                            <div>
+                                <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' }}>Claims</div>
+                                <div style={{ fontSize: '0.85rem', fontWeight: 700 }}>{offer.performance.claims}</div>
+                            </div>
+                        </div>
+
+                        <div className="db-offer-card-mobile-actions">
+                            <button className="db-btn db-btn-ghost" style={{ flex: 1, justifyContent: 'center' }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
+                                Edit
+                            </button>
+                            <button className="db-btn db-btn-ghost" style={{ flex: 1, justifyContent: 'center' }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></svg>
+                                Stats
+                            </button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
             {filteredOffers.some(o => o.status === 'rejected') && (
                 <div style={{ marginTop: '2rem', padding: '1.25rem', background: 'rgba(244, 63, 94, 0.05)', borderRadius: '1rem', border: '1px solid rgba(244, 63, 94, 0.15)' }}>
                     <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
@@ -194,7 +253,7 @@ export default function OffersPage() {
                         </div>
 
                         <div className="db-modal-content">
-                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr)', gap: '2rem' }}>
+                            <div className="db-grid-stack" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr)', gap: '2rem' }}>
                                 <form id="offerForm" onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                                     <div className="db-form-group">
                                         <label className="db-label">Offer Headline</label>
@@ -222,9 +281,9 @@ export default function OffersPage() {
                                     </div>
 
 
-                                    <div style={{ background: '#f8fafc', padding: '1.25rem', borderRadius: '1rem', border: '1px solid #e2e8f0' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                                            <label className="db-label" style={{ margin: 0 }}>Offer Visual (Image or Video)</label>
+                                    <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '1rem', border: '1px solid #e2e8f0' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                            <label className="db-label" style={{ margin: 0, fontSize: '0.8rem' }}>Offer Visual</label>
                                             <div style={{ display: 'flex', gap: '0.25rem', padding: '0.2rem', background: '#e2e8f0', borderRadius: '0.5rem' }}>
                                                 <button type="button" onClick={() => setUploadMode('url')} style={{ padding: '0.25rem 0.5rem', border: 'none', background: uploadMode === 'url' ? '#fff' : 'transparent', borderRadius: '0.4rem', fontSize: '0.65rem', fontWeight: 800, cursor: 'pointer', transition: 'all 0.2s' }}>🔗 Link</button>
                                                 <button type="button" onClick={() => setUploadMode('file')} style={{ padding: '0.25rem 0.5rem', border: 'none', background: uploadMode === 'file' ? '#fff' : 'transparent', borderRadius: '0.4rem', fontSize: '0.65rem', fontWeight: 800, cursor: 'pointer', transition: 'all 0.2s' }}>📁 Upload</button>
@@ -278,7 +337,7 @@ export default function OffersPage() {
                                         {newOffer.mediaType === 'video' && <small className="db-help" style={{ color: '#2563eb', display: 'block', marginTop: '0.5rem' }}>Motion thumbnails increase engagement by 40%!</small>}
                                     </div>
 
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                    <div className="db-grid-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                         <div className="db-form-group">
                                             <label className="db-label">CTA Action</label>
                                             <select
@@ -358,7 +417,7 @@ export default function OffersPage() {
                                         </div>
                                     )}
 
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                    <div className="db-grid-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                                         <div className="db-form-group">
                                             <label className="db-label">Start Date</label>
                                             <input
@@ -380,8 +439,8 @@ export default function OffersPage() {
                                     </div>
                                 </form>
 
-                                <div style={{ background: '#f8fafc', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0', minWidth: 0 }}>
-                                    <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.85rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', textAlign: 'center' }}>
+                                <div className="desktop-only" style={{ background: '#f8fafc', padding: '1.5rem', borderRadius: '1rem', border: '1px solid #e2e8f0', minWidth: 0 }}>
+                                    <h4 style={{ margin: '0 0 1rem 0', fontSize: '0.85rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', textAlign: 'center' }}>
                                         Live Preview
                                     </h4>
                                     <div style={{ transform: 'scale(0.85)', transformOrigin: 'top center' }}>
@@ -394,9 +453,9 @@ export default function OffersPage() {
                             </div>
                         </div>
 
-                        <div className="db-modal-footer">
-                            <button className="db-btn db-btn-ghost" onClick={() => setShowModal(false)}>Save Draft</button>
-                            <button type="submit" form="offerForm" className="db-btn db-btn-primary">
+                        <div className="db-modal-footer" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                            <button className="db-btn db-btn-ghost" onClick={() => setShowModal(false)} style={{ flex: 1, justifyContent: 'center' }}>Save Draft</button>
+                            <button type="submit" form="offerForm" className="db-btn db-btn-primary" style={{ flex: 1, justifyContent: 'center' }}>
                                 Submit for Approval
                             </button>
                         </div>

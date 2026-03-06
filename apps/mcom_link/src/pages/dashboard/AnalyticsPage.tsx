@@ -13,49 +13,52 @@ export default function AnalyticsPage() {
                 <div className="db-stat-card">
                     <div className="db-stat-label">Total Monthly Scans</div>
                     <div className="db-stat-value">{mockMetrics.totalScans}</div>
-                    <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.75rem', color: '#64748b' }}>Across all active locations</p>
+                    <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.7rem', color: '#475569' }}>All active locations</p>
                 </div>
                 <div className="db-stat-card" style={{ borderLeft: '4px solid #2563eb' }}>
-                    <div className="db-stat-label">Total Claims (Redemptions)</div>
+                    <div className="db-stat-label">Total Claims</div>
                     <div className="db-stat-value">{mockMetrics.totalClaims}</div>
-                    <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.75rem', color: '#64748b' }}>Customers who took action</p>
+                    <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.7rem', color: '#475569' }}>Customers who acted</p>
                 </div>
                 <div className="db-stat-card">
-                    <div className="db-stat-label">Average Conversion</div>
+                    <div className="db-stat-label">Avg. Conversion</div>
                     <div className="db-stat-value">{mockMetrics.conversionRate}%</div>
-                    <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.75rem', color: '#64748b' }}>Scan-to-Claim efficiency</p>
+                    <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.7rem', color: '#475569' }}>Scan-to-Claim rate</p>
                 </div>
             </div>
 
-            {/* 2. Visual Bar Chart — PRD STEP 6 (Non-technical) */}
-            <div className="db-card" style={{ marginBottom: '2.5rem' }}>
-                <h2 className="db-card-title">Scan History (Last 7 Days)</h2>
-                <div style={{ height: '240px', display: 'flex', alignItems: 'flex-end', gap: '1rem', padding: '1rem 0', borderBottom: '1px solid #f1f5f9' }}>
+            {/* 2. Visual Bar Chart */}
+            <div className="db-card" style={{ marginBottom: '1.5rem', overflow: 'hidden' }}>
+                <h2 className="db-card-title" style={{ marginBottom: '1rem' }}>Scan History (Last 7 Days)</h2>
+                <div style={{ height: '200px', display: 'flex', alignItems: 'flex-end', gap: '0.5rem', padding: '0.5rem 0', borderBottom: '1px solid #f1f5f9' }}>
                     {[
                         { day: 'Mon', val: 45 }, { day: 'Tue', val: 52 }, { day: 'Wed', val: 38 },
                         { day: 'Thu', val: 65 }, { day: 'Fri', val: 89 }, { day: 'Sat', val: 120 }, { day: 'Sun', val: 95 }
                     ].map((d, i) => (
-                        <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                        <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem', minWidth: 0 }}>
+                            <span style={{ fontSize: '0.6rem', fontWeight: 800, color: d.day === 'Sat' ? '#2563eb' : '#94a3b8' }}>{d.val}</span>
                             <div
                                 style={{
                                     width: '100%',
+                                    maxWidth: '48px',
                                     height: `${(d.val / 120) * 100}%`,
                                     background: d.day === 'Sat' ? '#2563eb' : '#e2e8f0',
-                                    borderRadius: '0.5rem 0.5rem 0 0',
-                                    transition: 'height 1s ease'
+                                    borderRadius: '0.4rem 0.4rem 0 0',
+                                    transition: 'height 1s ease',
+                                    minHeight: '4px'
                                 }}
                             />
-                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8' }}>{d.day}</span>
+                            <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#94a3b8' }}>{d.day}</span>
                         </div>
                     ))}
                 </div>
-                <p style={{ marginTop: '1rem', fontSize: '0.85rem', color: '#64748b' }}>
-                    💡 <b>Tip:</b> Your traffic peaks on <b>Saturdays</b>. Try running special weekend-only offers!
+                <p style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: '#475569' }}>
+                    💡 <b>Tip:</b> Traffic peaks on <b>Saturdays</b>. Try weekend-only offers!
                 </p>
             </div>
 
-            {/* 3. Per-Offer Breakdown — PRD STEP 6 */}
-            <div className="db-card">
+            {/* 3. Per-Offer Breakdown — Desktop Table */}
+            <div className="db-card desktop-only">
                 <h2 className="db-card-title" style={{ marginBottom: '1.5rem' }}>Performance per Offer</h2>
                 <div className="db-table-wrapper">
                     <table className="db-table">
@@ -65,7 +68,7 @@ export default function AnalyticsPage() {
                                 <th>Scans</th>
                                 <th>Claims</th>
                                 <th>Engagement Rate</th>
-                                <th>Performance Status</th>
+                                <th>Performance</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -73,7 +76,6 @@ export default function AnalyticsPage() {
                                 const rate = offer.performance.scans > 0
                                     ? ((offer.performance.claims / offer.performance.scans) * 100).toFixed(1)
                                     : "0.0";
-
                                 return (
                                     <tr key={offer.id}>
                                         <td><div style={{ fontWeight: 700 }}>{offer.headline}</div></td>
@@ -94,6 +96,41 @@ export default function AnalyticsPage() {
                         </tbody>
                     </table>
                 </div>
+            </div>
+
+            {/* 3b. Per-Offer Breakdown — Mobile Cards */}
+            <div className="mobile-only">
+                <h2 className="db-card-title" style={{ marginBottom: '1rem' }}>Performance per Offer</h2>
+                {myOffers.map(offer => {
+                    const rate = offer.performance.scans > 0
+                        ? ((offer.performance.claims / offer.performance.scans) * 100).toFixed(1)
+                        : "0.0";
+                    return (
+                        <div key={offer.id} className="db-offer-card-mobile" style={{ marginBottom: '0.75rem' }}>
+                            <div style={{ fontWeight: 800, fontSize: '0.95rem', marginBottom: '0.5rem' }}>{offer.headline}</div>
+                            <div className="db-offer-card-mobile-stats">
+                                <div style={{ textAlign: 'center' }}>
+                                    <div style={{ fontSize: '0.6rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', marginBottom: '0.15rem' }}>Scans</div>
+                                    <div style={{ fontSize: '1.1rem', fontWeight: 900 }}>{offer.performance.scans}</div>
+                                </div>
+                                <div style={{ textAlign: 'center' }}>
+                                    <div style={{ fontSize: '0.6rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', marginBottom: '0.15rem' }}>Claims</div>
+                                    <div style={{ fontSize: '1.1rem', fontWeight: 900 }}>{offer.performance.claims}</div>
+                                </div>
+                                <div style={{ textAlign: 'center' }}>
+                                    <div style={{ fontSize: '0.6rem', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', marginBottom: '0.15rem' }}>Rate</div>
+                                    <div style={{ fontSize: '1.1rem', fontWeight: 900, color: '#2563eb' }}>{rate}%</div>
+                                </div>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                <div style={{ flex: 1, height: '8px', background: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
+                                    <div style={{ width: `${Math.min(parseFloat(rate) * 5, 100)}%`, height: '100%', background: '#2563eb', borderRadius: '4px' }} />
+                                </div>
+                                <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#2563eb', whiteSpace: 'nowrap' }}>High</span>
+                            </div>
+                        </div>
+                    )
+                })}
             </div>
         </DashboardLayout>
     )

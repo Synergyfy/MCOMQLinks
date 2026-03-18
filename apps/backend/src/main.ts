@@ -13,6 +13,14 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
 // 1. Shared Configuration Function
 export function configureApp(app: INestApplication) {
+  // Normalization: collapse multiple slashes (e.g. //auth/login -> /auth/login)
+  app.use((req: any, res: any, next: any) => {
+    if (req.url && req.url.includes('//')) {
+      req.url = req.url.replace(/\/\/+/g, '/');
+    }
+    next();
+  });
+
   // CORS
   app.enableCors({
     origin: true,

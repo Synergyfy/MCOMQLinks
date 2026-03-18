@@ -43,6 +43,7 @@ import MerchantControl from './pages/admin/MerchantControl.tsx'
 import SeasonalCampaigns from './pages/admin/SeasonalCampaigns.tsx'
 import IdentityControl from './pages/admin/IdentityControl.tsx'
 import SystemHealth from './pages/admin/SystemHealth.tsx'
+import AdApprovalPage from './pages/admin/AdApproval.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -84,6 +85,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/admin/seasons" element={<ProtectedRoute><SeasonalCampaigns /></ProtectedRoute>} />
         <Route path="/admin/identity" element={<ProtectedRoute><IdentityControl /></ProtectedRoute>} />
         <Route path="/admin/health" element={<ProtectedRoute><SystemHealth /></ProtectedRoute>} />
+        <Route path="/admin/ad-approval" element={<ProtectedRoute><AdApprovalPage /></ProtectedRoute>} />
 
         {/* Global Fallback Route */}
         <Route path="*" element={<FallbackPage />} />

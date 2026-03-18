@@ -141,7 +141,7 @@ export default function IdentityControl() {
                         boxShadow: '0 25px 50px -12px rgba(0,0,0,0.15)'
                     }}>
                         <div style={{ background: template.brandColor, padding: '1.25rem', textAlign: 'center', color: '#fff' }}>
-                            <div style={{ fontSize: '0.6rem', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '1px' }}>MCOMLINKS</div>
+                            <div style={{ fontSize: '0.6rem', fontWeight: 800, textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '1px' }}>MCOMQLINKS</div>
                             <div style={{ fontSize: '0.8rem', fontWeight: 800 }}>{template.headerText}</div>
                         </div>
 

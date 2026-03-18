@@ -13,14 +13,20 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
 // 1. Shared Configuration Function
 export function configureApp(app: INestApplication) {
+  // Normalization: collapse multiple slashes (e.g. //auth/login -> /auth/login)
+  app.use((req: any, res: any, next: any) => {
+    if (req.url && req.url.includes('//')) {
+      req.url = req.url.replace(/\/\/+/g, '/');
+    }
+    next();
+  });
+
   // CORS
   app.enableCors({
     origin: true,
     credentials: true,
   });
 
-  // Global prefix
-  app.setGlobalPrefix('api/v1');
 
   // Filters
   app.useGlobalFilters(new AllExceptionsFilter());
@@ -79,7 +85,7 @@ if (require.main === module) {
 
     const port = process.env.PORT || 3000;
     await app.listen(port);
-    logger.log(`Application is running on: http://localhost:${port}/api/v1`);
+    logger.log(`Application is running on: http://localhost:${port}`);
     logger.log(`Swagger documentation: http://localhost:${port}/api-docs`);
   };
   void bootstrap();

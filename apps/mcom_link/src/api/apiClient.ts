@@ -12,7 +12,12 @@ export async function apiRequest<T>(
         ...options.headers,
     };
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    // Sanitize URL construction to avoid double slashes
+    const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = `${baseUrl}${cleanEndpoint}`;
+
+    const response = await fetch(url, {
         ...options,
         headers,
     });

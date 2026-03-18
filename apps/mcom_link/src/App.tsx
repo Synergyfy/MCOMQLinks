@@ -108,13 +108,13 @@ function App() {
             ))}
             <div className="mobile-auth">
               <Link to="/login" className="btn-ghost" onClick={() => setIsMenuOpen(false)}>Sign In</Link>
-              <Link to="/login" className="btn-premium" onClick={() => setIsMenuOpen(false)}>Get Started</Link>
+              <Link to="/signup" className="btn-premium" onClick={() => setIsMenuOpen(false)}>Get Started</Link>
             </div>
           </div>
 
           <div className="desktop-auth">
             <Link to="/login" className="btn-ghost" style={{ textDecoration: 'none' }}>Sign In</Link>
-            <Link to="/login" className="btn-premium" style={{ textDecoration: 'none' }}>
+            <Link to="/signup" className="btn-premium" style={{ textDecoration: 'none' }}>
               Get Started <ArrowRight />
             </Link>
           </div>
@@ -135,7 +135,7 @@ function App() {
               If you are a local high street business owner, you can now claim and register your very own 24/7 Hyperlocal Mcom Expo storefront.
             </p>
             <div className="hero-ctas">
-              <Link to="/login" className="btn-premium" style={{ padding: '0.85rem 2rem', fontSize: '0.95rem', textDecoration: 'none' }}>
+              <Link to="/signup" className="btn-premium" style={{ padding: '0.85rem 2rem', fontSize: '0.95rem', textDecoration: 'none' }}>
                 Show and Tell with McomQlinks <ArrowRight />
               </Link>
               <button className="btn-ghost" style={{ padding: '0.85rem 2rem', fontSize: '0.95rem', display: 'flex', alignItems: 'center' }}>
@@ -275,7 +275,7 @@ function App() {
             Join thousands of businesses using the McomQlinks Promo Expo to automate their marketing.
           </p>
           <div className="hero-ctas" style={{ justifyContent: 'center' }}>
-            <Link to="/login" className="btn-premium" style={{ padding: '1.1rem 3rem', fontSize: '1.05rem', textDecoration: 'none' }}>
+            <Link to="/signup" className="btn-premium" style={{ padding: '1.1rem 3rem', fontSize: '1.05rem', textDecoration: 'none' }}>
               Start Your Journey <ArrowRight />
             </Link>
           </div>

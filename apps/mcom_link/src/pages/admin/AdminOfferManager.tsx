@@ -11,6 +11,7 @@ export default function AdminOfferManager() {
     const [loading, setLoading] = useState(true)
     const [filter, setFilter] = useState<StatusTab>('all')
     const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+    const [wizardStep, setWizardStep] = useState(1)
     const [uploadMode, setUploadMode] = useState<'url' | 'file'>('url')
 
     // Rejection modal state
@@ -31,6 +32,12 @@ export default function AdminOfferManager() {
                 setNewOffer({ ...newOffer, videoUrl: url })
             }
         }
+    }
+
+    // Helper to format date-time for display
+    const formatDisplayDate = (dateStr: string) => {
+        if (!dateStr) return '—'
+        return dateStr.replace('T', ' ')
     }
 
     const [newOffer, setNewOffer] = useState({
@@ -103,7 +110,7 @@ export default function AdminOfferManager() {
     }
 
     const handleArchive = async (id: string) => {
-        if (confirm('Archive this offer? It will be removed from rotation but kept in analytics history.')) {
+        if (confirm('Archive this offer? It will be removed from circulation but kept in analytics history.')) {
             try {
                 await api.delete(`/admin/offers/${id}`)
                 fetchOffers() // Refresh list
@@ -169,6 +176,7 @@ export default function AdminOfferManager() {
 
             await api.post('/admin/offers', payload)
             setIsAddModalOpen(false)
+            setWizardStep(1)
             fetchOffers() // Refresh list
             setNewOffer({
                 businessName: '',
@@ -397,8 +405,8 @@ export default function AdminOfferManager() {
 
                                         {/* Schedule */}
                                         <td>
-                                            <div style={{ fontSize: '0.75rem', fontWeight: 600 }}>{offer.startDate}</div>
-                                            <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>to {offer.endDate}</div>
+                                            <div style={{ fontSize: '0.75rem', fontWeight: 600 }}>{formatDisplayDate(offer.startDate)}</div>
+                                            <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>to {formatDisplayDate(offer.endDate)}</div>
                                         </td>
 
                                         {/* Actions */}
@@ -576,18 +584,30 @@ export default function AdminOfferManager() {
                 </div>
             )}
 
-            {/* Create Global Offer Modal */}
             {isAddModalOpen && (
                 <div className="db-modal-overlay">
-                    <div className="db-modal">
-                        <div className="db-modal-header">
-                            <h3 className="db-card-title">Create Global Campaign Offer</h3>
-                            <button onClick={() => { setIsAddModalOpen(false); setUploadMode('url'); }} className="db-btn-close">&times;</button>
+                    <div className="db-modal" style={{ maxWidth: '600px' }}>
+                        <div className="db-modal-header" style={{ padding: '1.5rem 1.5rem 1rem' }}>
+                            <div>
+                                <h3 className="db-card-title">Provision Global Campaign</h3>
+                                <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.75rem' }}>
+                                    {[1, 2, 3].map(s => (
+                                        <div key={s} style={{ 
+                                            height: '4px', flex: 1, borderRadius: '2px', 
+                                            background: s <= wizardStep ? '#2563eb' : '#e2e8f0',
+                                            transition: 'background 0.3s'
+                                        }} />
+                                    ))}
+                                </div>
+                            </div>
+                            <button onClick={() => { setIsAddModalOpen(false); setWizardStep(1); setUploadMode('url'); }} className="db-btn-close">&times;</button>
                         </div>
                         <form onSubmit={handleAddOffer}>
-                            <div className="db-modal-content">
-                                <div className="db-grid-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+                            <div className="db-modal-content" style={{ padding: '1.5rem', minHeight: '400px' }}>
+                                
+                                {wizardStep === 1 && (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                        <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#2563eb', textTransform: 'uppercase' }}>Step 1: Creative Identity</div>
                                         <div className="db-form-group">
                                             <label className="db-label">Business Name</label>
                                             <input type="text" className="db-input" required placeholder="e.g. Marco's Pizza" value={newOffer.businessName} onChange={e => setNewOffer({ ...newOffer, businessName: e.target.value })} />
@@ -627,76 +647,13 @@ export default function AdminOfferManager() {
                                                 </label>
                                             )}
                                         </div>
-
-                                        <div className="db-form-group">
-                                            <label className="db-label">CTA Type</label>
-                                            <select className="db-input" value={newOffer.ctaType} onChange={e => setNewOffer({ ...newOffer, ctaType: e.target.value as any })}>
-                                                <option value="claim">Lead Claim (Email/Phone)</option>
-                                                <option value="redeem">Direct Promo Code</option>
-                                                <option value="redirect">External Website Visit</option>
-                                            </select>
-                                        </div>
-                                        {newOffer.ctaType === 'redirect' && (
-                                            <div className="db-form-group">
-                                                <label className="db-label">Destination Link</label>
-                                                <input type="url" className="db-input" required placeholder="https://..." value={newOffer.ctaValue} onChange={e => setNewOffer({ ...newOffer, ctaValue: e.target.value })} />
-                                            </div>
-                                        )}
-                                        {newOffer.ctaType === 'redeem' && (
-                                            <div className="db-form-group">
-                                                <label className="db-label">Promo Code</label>
-                                                <input type="text" className="db-input" required placeholder="e.g. SAVE20" value={newOffer.ctaValue} onChange={e => setNewOffer({ ...newOffer, ctaValue: e.target.value })} />
-                                            </div>
-                                        )}
-                                        {newOffer.ctaType === 'claim' && (
-                                            <div className="db-form-group">
-                                                <label className="db-label">Claim Contact (Email/Phone)</label>
-                                                <input type="text" className="db-input" required placeholder="e.g. offers@marco.com" value={newOffer.ctaValue} onChange={e => setNewOffer({ ...newOffer, ctaValue: e.target.value })} />
-                                            </div>
-                                        )}
                                     </div>
+                                )}
 
+                                {wizardStep === 2 && (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                                        <div className="db-grid-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                                            <div className="db-form-group">
-                                                <label className="db-label">Start Date</label>
-                                                <input type="date" className="db-input" required value={newOffer.startDate} onChange={e => setNewOffer({ ...newOffer, startDate: e.target.value })} />
-                                            </div>
-                                            <div className="db-form-group">
-                                                <label className="db-label">End Date</label>
-                                                <input type="date" className="db-input" required value={newOffer.endDate} onChange={e => setNewOffer({ ...newOffer, endDate: e.target.value })} />
-                                            </div>
-                                        </div>
-
-                                        <div className="db-form-group">
-                                            <label className="db-label">Assigned Location</label>
-                                            <select className="db-input" value={newOffer.location} onChange={e => setNewOffer({ ...newOffer, location: e.target.value })}>
-                                                <option>High Street Central</option>
-                                                <option>Mall North Wing</option>
-                                                <option>East Plaza Square</option>
-                                                <option>West End Hub</option>
-                                            </select>
-                                        </div>
-
-                                        <div className="db-form-group">
-                                            <label className="db-label">Seasonal Automation</label>
-                                            <select className="db-input" value={newOffer.season} onChange={e => {
-                                                const selectedValue = e.target.value
-                                                const seasonData = mockSeasons.find(s => s.id === `s-${selectedValue}`)
-                                                if (seasonData) {
-                                                    setNewOffer({ ...newOffer, season: selectedValue as any, startDate: seasonData.startDate, endDate: seasonData.endDate })
-                                                } else {
-                                                    setNewOffer({ ...newOffer, season: selectedValue as any })
-                                                }
-                                            }}>
-                                                <option value="all">Evergreen (Default)</option>
-                                                <option value="winter">Winter Campaign</option>
-                                                <option value="spring">Spring Campaign</option>
-                                                <option value="summer">Summer Campaign</option>
-                                                <option value="autumn">Autumn Campaign</option>
-                                            </select>
-                                        </div>
-
+                                        <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#2563eb', textTransform: 'uppercase' }}>Step 2: Targeting & Rotation Logic</div>
+                                        
                                         <div style={{ padding: '1.25rem', background: '#f0f9ff', borderRadius: '1rem', border: '1px solid #bae6fd' }}>
                                             <label className="db-label">Campaign Exposure Layer</label>
                                             <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
@@ -704,10 +661,6 @@ export default function AdminOfferManager() {
                                                 <button type="button" onClick={() => setNewOffer({ ...newOffer, exposureType: 'hyperlocal' })} className={`db-btn ${newOffer.exposureType === 'hyperlocal' ? 'db-btn-primary' : 'db-btn-ghost'}`} style={{ flex: 1, padding: '0.5rem', fontSize: '0.7rem' }}>📍 Local</button>
                                                 <button type="button" onClick={() => setNewOffer({ ...newOffer, exposureType: 'nearby' })} className={`db-btn ${newOffer.exposureType === 'nearby' ? 'db-btn-primary' : 'db-btn-ghost'}`} style={{ flex: 1, padding: '0.5rem', fontSize: '0.7rem' }}>🚀 Nearby</button>
                                             </div>
-
-                                            {newOffer.exposureType === 'national' && (
-                                                <p style={{ fontSize: '0.65rem', color: '#64748b', margin: '0 0 1rem' }}>National offers appear across all standard rotator hubs in the country.</p>
-                                            )}
 
                                             {newOffer.exposureType !== 'national' && (
                                                 <div style={{ marginBottom: '1rem' }}>
@@ -725,7 +678,7 @@ export default function AdminOfferManager() {
 
                                             <div style={{ marginTop: '0.5rem' }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                                                    <label className="db-label" style={{ margin: 0 }}>Rotator Weight</label>
+                                                    <label className="db-label" style={{ margin: 0 }}>Display Priority (Weight)</label>
                                                     <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#2563eb' }}>{newOffer.rotatorWeight}%</span>
                                                 </div>
                                                 <input 
@@ -742,16 +695,89 @@ export default function AdminOfferManager() {
                                         <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '1rem' }}>
                                             <input type="checkbox" id="premium-toggle" checked={newOffer.isPremium} onChange={e => setNewOffer({ ...newOffer, isPremium: e.target.checked })} style={{ width: '18px', height: '18px' }} />
                                             <div>
-                                                <label htmlFor="premium-toggle" style={{ fontWeight: 800, fontSize: '0.85rem', display: 'block' }}>Priority Placement (Boost)</label>
-                                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Always shows at the top of the rotation.</span>
+                                                <label htmlFor="premium-toggle" style={{ fontWeight: 800, fontSize: '0.85rem', display: 'block' }}>Priority Boost (Star Placement)</label>
+                                                <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Force this offer to the beginning of the sequence.</span>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
+                                )}
+
+                                {wizardStep === 3 && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                        <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#2563eb', textTransform: 'uppercase' }}>Step 3: Operation & Schedule</div>
+                                        
+                                        <div className="db-grid-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                            <div className="db-form-group">
+                                                <label className="db-label">Start Date & Time</label>
+                                                <input type="datetime-local" className="db-input" required value={newOffer.startDate} onChange={e => setNewOffer({ ...newOffer, startDate: e.target.value })} />
+                                            </div>
+                                            <div className="db-form-group">
+                                                <label className="db-label">End Date & Time</label>
+                                                <input type="datetime-local" className="db-input" required value={newOffer.endDate} onChange={e => setNewOffer({ ...newOffer, endDate: e.target.value })} />
+                                            </div>
+                                        </div>
+
+                                        <div className="db-grid-stack" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                            <div className="db-form-group">
+                                                <label className="db-label">CTA Mode</label>
+                                                <select className="db-input" value={newOffer.ctaType} onChange={e => setNewOffer({ ...newOffer, ctaType: e.target.value as any })}>
+                                                    <option value="claim">Lead Capture</option>
+                                                    <option value="redeem">Promo Code</option>
+                                                    <option value="redirect">Link Click</option>
+                                                </select>
+                                            </div>
+                                            <div className="db-form-group">
+                                                <label className="db-label">Target Hub</label>
+                                                <select className="db-input" value={newOffer.location} onChange={e => setNewOffer({ ...newOffer, location: e.target.value })}>
+                                                    <option>High Street Central</option>
+                                                    <option>Mall North Wing</option>
+                                                    <option>East Plaza Square</option>
+                                                    <option>West End Hub</option>
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        <div className="db-form-group">
+                                            <label className="db-label">Action Value ({newOffer.ctaType === 'redirect' ? 'URL' : newOffer.ctaType === 'redeem' ? 'Code' : 'Contact'})</label>
+                                            <input type="text" className="db-input" required placeholder="Enter value..." value={newOffer.ctaValue} onChange={e => setNewOffer({ ...newOffer, ctaValue: e.target.value })} />
+                                        </div>
+
+                                        <div className="db-form-group">
+                                            <label className="db-label">Seasonal Automation</label>
+                                            <select className="db-input" value={newOffer.season} onChange={e => {
+                                                const selectedValue = e.target.value
+                                                const seasonData = mockSeasons.find(s => s.id === `s-${selectedValue}`)
+                                                if (seasonData) {
+                                                    setNewOffer({ ...newOffer, season: selectedValue as any, startDate: seasonData.startDate, endDate: seasonData.endDate })
+                                                } else {
+                                                    setNewOffer({ ...newOffer, season: selectedValue as any })
+                                                }
+                                            }}>
+                                                <option value="all">Evergreen (Active Year-Round)</option>
+                                                <option value="winter">Winter Campaign Window</option>
+                                                <option value="spring">Spring Campaign Window</option>
+                                                <option value="summer">Summer Campaign Window</option>
+                                                <option value="autumn">Autumn Campaign Window</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
-                            <div className="db-modal-footer" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                                <button type="button" className="db-btn db-btn-ghost" onClick={() => setIsAddModalOpen(false)} style={{ flex: 1, justifyContent: 'center' }}>Cancel</button>
-                                <button type="submit" className="db-btn db-btn-primary" style={{ flex: 1, justifyContent: 'center' }}>Provision Global Offer</button>
+                            <div className="db-modal-footer" style={{ borderTop: '1px solid #f1f5f9', padding: '1.25rem 1.5rem', display: 'flex', gap: '1rem' }}>
+                                {wizardStep > 1 && (
+                                    <button type="button" className="db-btn db-btn-ghost" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setWizardStep(wizardStep - 1)}>
+                                        ← Back
+                                    </button>
+                                )}
+                                {wizardStep < 3 ? (
+                                    <button type="button" className="db-btn db-btn-primary" style={{ flex: 2, justifyContent: 'center' }} onClick={() => setWizardStep(wizardStep + 1)}>
+                                        Next Step →
+                                    </button>
+                                ) : (
+                                    <button type="submit" className="db-btn" style={{ flex: 2, justifyContent: 'center', background: '#10b981', color: '#fff' }}>
+                                        Provision Global Offer
+                                    </button>
+                                )}
                             </div>
                         </form>
                     </div>
@@ -764,7 +790,7 @@ export default function AdminOfferManager() {
                         <div className="db-modal-header" style={{ padding: '1.5rem', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
                                 <h1 style={{ fontSize: '1.25rem', fontWeight: 900, color: '#0f172a' }}>Edit Exposure & Precision Weights</h1>
-                                <p style={{ fontSize: '0.75rem', color: '#64748b', margin: 0 }}>Adjust how this offer behaves in the rotator network.</p>
+                                <p style={{ fontSize: '0.75rem', color: '#64748b', margin: 0 }}>Adjust how this offer behaves in the delivery network.</p>
                             </div>
                             <button className="db-modal-close" onClick={() => setIsEditModalOpen(false)}>✕</button>
                         </div>
@@ -813,7 +839,7 @@ export default function AdminOfferManager() {
                                     <div style={{ background: '#f8fafc', padding: '1.5rem', borderRadius: '1.5rem', border: '1px solid #e2e8f0' }}>
                                         <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
                                             <div style={{ fontSize: '2.5rem', fontWeight: 900, color: '#2563eb', lineHeight: 1 }}>{editTarget.rotatorWeight}%</div>
-                                            <div style={{ fontSize: '0.7rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Rotator Weight (Power)</div>
+                                            <div style={{ fontSize: '0.7rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Display Priority (Intensity)</div>
                                         </div>
                                         
                                         <input 

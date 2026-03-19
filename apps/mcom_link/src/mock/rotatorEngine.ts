@@ -4,7 +4,7 @@ import { fallbackOffer } from '../constants/fallbackOffer';
 
 // Simple mapping for location data enrichment in the frontend mock
 export const mockLocations: Record<string, { name: string, postcode: string, campaignName: string }> = {
-    'loc-peckham-01': { name: 'Peckham High Street', postcode: 'SE15', campaignName: 'MCOM Spring Special' },
+    'loc-peckham-01': { name: 'Peckham High Street', postcode: 'SE15', campaignName: 'MCOMQ Spring Special' },
     'loc-brixton-01': { name: 'Brixton Market', postcode: 'SW9', campaignName: 'Summer Vibes Brixton' },
     'loc-stratford-01': { name: 'Stratford Centre', postcode: 'E15', campaignName: 'Corporate Default' },
 };
@@ -57,6 +57,63 @@ export async function getNextOffer(locationId: string): Promise<{ offer: Offer, 
     return {
         offer: selectedOffer,
         location
+    };
+}
+
+/**
+ * Returns the entire pool of eligible offers for a location
+ * Priorities: Hyperlocal > Nearby > National
+ */
+export async function getOfferPool(locationId: string): Promise<{ offers: Offer[], location: any, exposureType: string }> {
+    const location = mockLocations[locationId] || { name: 'Unknown Location', postcode: 'GEN', campaignName: 'Global Rotation' };
+    const myPostcode = location.postcode;
+
+    // 0. Filter Active & Paid
+    const activeAndPaid = mockOffers.filter(o => o.isActive && o.status === 'approved' && o.billingStatus !== 'suspended');
+
+    // 1. Filter Hyper-local offers
+    const hyperlocalOffers = activeAndPaid.filter(o => 
+        o.exposureType === 'hyperlocal' && 
+        o.targetPostcode === myPostcode
+    );
+
+    // 2. Filter Nearby offers
+    const nearbyOffers = activeAndPaid.filter(o => 
+        o.exposureType === 'nearby' && 
+        isNearby(o.targetPostcode || '', myPostcode, o.targetRadius || 5)
+    );
+
+    // 3. Filter National offers
+    const nationalOffers = activeAndPaid.filter(o => 
+        o.exposureType === 'national'
+    );
+
+    // Combine in priority order - EXCLUSIVE LAYERS (As requested)
+    // We only show ONE layer at a time in a rotator.
+    let pool: Offer[] = [];
+    let selectedType: string = 'national';
+    
+    if (hyperlocalOffers.length > 0) {
+        pool = hyperlocalOffers;
+        selectedType = 'hyperlocal';
+    } else if (nearbyOffers.length > 0) {
+        pool = nearbyOffers;
+        selectedType = 'nearby';
+    } else if (nationalOffers.length > 0) {
+        pool = nationalOffers;
+        selectedType = 'national';
+    } else {
+        pool = [fallbackOffer];
+        selectedType = 'fallback';
+    }
+
+    // Sort by weight (highest probability first) to look professional
+    const sortedPool = [...pool].sort((a: any, b: any) => (b.rotatorWeight || 100) - (a.rotatorWeight || 100));
+
+    return {
+        offers: sortedPool,
+        location,
+        exposureType: selectedType
     };
 }
 

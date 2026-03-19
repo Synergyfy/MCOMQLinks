@@ -62,4 +62,12 @@ To see this in action:
 
 
 remove rotator, admin offer date time needed, 
-Limit for hyperlocal campaigns, reminder number
+Limit for hyperlocal campaigns, reminder phone number, separate business name from full name on the sign up page, EYE ICON FOR PASSWORD FIELD, IN THE SIGNUP WE STILL HAVE MCOMLINKS INSEAD OF MCOMQLINKS
+
+
+AFTER CREATING ACCOUNT IT OPENS THE SUBSCRIPTION PAGE, IT SHOULD OPEN THE CHOOSE UR PLAN MODAL
+
+
+WHEN THEY CREATE OFFER , IT HAS TO BE APPROVED BY ADMIN FIRST, THEN IT WILL BE ACTIVE IN THE ROTATOR
+
+WHEN BUSINESS WANTS 

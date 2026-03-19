@@ -1,11 +1,28 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import DashboardLayout from '../../components/DashboardLayout'
 
 export default function BillingPage() {
-    const [plan, setPlan] = useState<'Hyper-local' | 'Nearby' | 'National'>('Hyper-local')
-    const [billingStatus, setBillingStatus] = useState<'active' | 'suspended'>('active')
+    const [searchParams] = useSearchParams()
+    const [plan, setPlan] = useState<'Hyper-local' | 'Nearby' | 'National' | null>(null)
+    const [billingStatus, setBillingStatus] = useState<'active' | 'suspended' | 'pending'>('pending')
     const [showPaymentModal, setShowPaymentModal] = useState(false)
     const [showUpgradeModal, setShowUpgradeModal] = useState(false)
+
+    useEffect(() => {
+        const fetchCurrentPlan = () => {
+            const mockPlan = localStorage.getItem('mock_user_plan')
+            const mockStatus = localStorage.getItem('mock_user_status')
+            
+            if (mockPlan) setPlan(mockPlan as any)
+            if (mockStatus) setBillingStatus(mockStatus as any)
+        }
+        fetchCurrentPlan()
+
+        if (searchParams.get('first_time') === 'true') {
+            setShowUpgradeModal(true)
+        }
+    }, [searchParams])
 
     // Mock Invoices
     const invoices = [
@@ -40,20 +57,20 @@ export default function BillingPage() {
                 }}>
                     <div>
                         <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Your Membership</div>
-                        <h2 style={{ fontSize: '2rem', fontWeight: 900, marginBottom: '0.5rem' }}>{plan} Membership</h2>
+                        <h2 style={{ fontSize: '2rem', fontWeight: 900, marginBottom: '0.5rem' }}>{plan ? `${plan} Membership` : 'No Active Plan'}</h2>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                             <span style={{ 
                                 padding: '0.4rem 0.8rem', 
-                                background: billingStatus === 'active' ? '#ecfdf5' : '#fef2f2', 
-                                color: billingStatus === 'active' ? '#059669' : '#dc2626', 
+                                background: billingStatus === 'active' ? '#ecfdf5' : (billingStatus === 'suspended' ? '#fef2f2' : '#f8fafc'), 
+                                color: billingStatus === 'active' ? '#059669' : (billingStatus === 'suspended' ? '#dc2626' : '#64748b'), 
                                 borderRadius: '1rem', 
                                 fontSize: '0.75rem', 
                                 fontWeight: 800,
-                                border: `1px solid ${billingStatus === 'active' ? '#a7f3d0' : '#fecaca'}`
+                                border: `1px solid ${billingStatus === 'active' ? '#a7f3d0' : (billingStatus === 'suspended' ? '#fecaca' : '#e2e8f0')}`
                             }}>
-                                {billingStatus === 'active' ? '✓ BILLING ACTIVE' : '⚠ BILLING SUSPENDED'}
+                                {billingStatus === 'active' ? '✓ BILLING ACTIVE' : (billingStatus === 'suspended' ? '⚠ BILLING SUSPENDED' : '○ INACTIVE')}
                             </span>
-                            <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Renews on April 1st, 2024</span>
+                            <span style={{ fontSize: '0.85rem', color: '#64748b' }}>{plan ? 'Renews on April 1st, 2024' : 'Select a plan to start'}</span>
                         </div>
                     </div>
                     
@@ -76,7 +93,7 @@ export default function BillingPage() {
                                 borderRadius: '1rem', fontWeight: 800, cursor: 'pointer', boxShadow: '0 10px 20px rgba(37,99,235,0.2)' 
                             }}
                         >
-                            Upgrade Membership
+                            {plan ? 'Upgrade Membership' : 'Choose Your Plan'}
                         </button>
                     </div>
                 </div>
@@ -85,7 +102,7 @@ export default function BillingPage() {
                     <div style={{ marginBottom: '3rem', padding: '1.5rem', background: '#fff5f5', borderRadius: '1rem', border: '1px solid #fed7d7', display: 'flex', alignItems: 'center', gap: '1rem' }}>
                         <span style={{ fontSize: '2rem' }}>⚠️</span>
                         <div style={{ fontSize: '0.9rem', color: '#c53030', fontWeight: 600 }}>
-                            <b>Your campaigns are hidden!</b> Because your billing is suspended, your rotator offers will not appear on any storefronts till payment is received.
+                            <b>Your campaigns are hidden!</b> Because your billing is suspended, your campaign offers will not appear on any storefronts till payment is received.
                         </div>
                     </div>
                 )}
@@ -106,7 +123,7 @@ export default function BillingPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {invoices.map(inv => (
+                                    {plan ? invoices.map(inv => (
                                         <tr key={inv.id}>
                                             <td style={{ fontSize: '0.85rem', fontWeight: 600 }}>{inv.date}</td>
                                             <td style={{ fontSize: '0.85rem' }}>{inv.id}</td>
@@ -117,7 +134,11 @@ export default function BillingPage() {
                                                 </span>
                                             </td>
                                         </tr>
-                                    ))}
+                                    )) : (
+                                        <tr>
+                                            <td colSpan={4} style={{ textAlign: 'center', padding: '2rem', color: '#64748b', fontSize: '0.85rem' }}>No billing history available</td>
+                                        </tr>
+                                    )}
                                 </tbody>
                             </table>
                         </div>
@@ -140,8 +161,13 @@ export default function BillingPage() {
                         {/* Self-Destruct/Suspend Tool (For Testing) */}
                         <div style={{ marginTop: '2rem', padding: '1.25rem', background: '#f8fafc', borderRadius: '1rem', border: '1px dashed #cbd5e1' }}>
                             <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 800, marginBottom: '0.75rem', textTransform: 'uppercase' }}>Simulation Lab (Testing Only)</div>
-                            <button 
-                                onClick={() => setBillingStatus(billingStatus === 'active' ? 'suspended' : 'active')}
+                             <button 
+                                 onClick={() => {
+                                     const newStatus = billingStatus === 'active' ? 'suspended' : 'active'
+                                     setBillingStatus(newStatus)
+                                     localStorage.setItem('mock_user_status', newStatus)
+                                     window.dispatchEvent(new CustomEvent('profile-updated'))
+                                 }}
                                 style={{ 
                                     width: '100%', padding: '0.6rem', background: billingStatus === 'active' ? '#dc2626' : '#059669', 
                                     color: '#fff', border: 'none', borderRadius: '0.5rem', fontWeight: 800, cursor: 'pointer' 
@@ -165,7 +191,7 @@ export default function BillingPage() {
                         <div className="db-modal-content" style={{ padding: '2rem' }}>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
                                 {[
-                                    { id: 'Hyper-local', name: 'Hyper-local', price: 'Included', features: ['1 Active Campaign', 'Rotator Weight Toggles', 'Postcode-Locked Exposure', 'Standard Support'], color: '#10b981' },
+                                    { id: 'Hyper-local', name: 'Hyper-local', price: 'Included', features: ['1 Active Campaign', 'Display Priority Controls', 'Postcode-Locked Exposure', 'Standard Support'], color: '#10b981' },
                                     { id: 'Nearby', name: 'Nearby Expansion', price: '£X/Area', features: ['Expansion Radius Add-ons', 'Multiple Nearby Districts', 'B2B Partnerships', 'Growth Support'], color: '#f59e0b' },
                                     { id: 'National', name: 'National Network', price: 'CPM/Fixed', features: ['CPM or Fixed Slot Access', 'Premium Override Rights', 'Platform-Wide Exposure', 'Platinum Concierge'], color: '#3b82f6' }
                                 ].map(p => (
@@ -188,9 +214,18 @@ export default function BillingPage() {
                                         <button 
                                             disabled={plan === p.id}
                                             onClick={() => {
+                                                // MOCK SAVE TO LOCAL STORAGE
+                                                localStorage.setItem('mock_user_plan', p.id)
+                                                localStorage.setItem('mock_user_status', 'active')
+
                                                 setPlan(p.id as any)
+                                                setBillingStatus('active')
                                                 setShowUpgradeModal(false)
-                                                alert(`Upgraded to ${p.id} Membership! Your account access is now updated.`)
+                                                
+                                                // NOTIFY LAYOUT TO UNLOCK LINKS
+                                                window.dispatchEvent(new CustomEvent('profile-updated'))
+                                                
+                                                alert(`Successfully subscribed to the ${p.id} Plan! Your storefront is now active.`)
                                             }}
                                             style={{ 
                                                 marginTop: 'auto', padding: '0.75rem', borderRadius: '0.75rem', 

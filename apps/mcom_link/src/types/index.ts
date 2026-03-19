@@ -13,6 +13,7 @@ export interface Offer {
     ctaType: CTAType
     ctaLabel: string
     redirectUrl?: string
+    googleMapsLocation?: string
     redemptionCode?: string
     redemptionInstructions?: string
     isActive: boolean

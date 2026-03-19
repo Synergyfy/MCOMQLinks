@@ -1,4 +1,5 @@
 import type { Offer } from '../types';
+export type { Offer };
 
 export const mockOffers: Offer[] = [
     // National Layer
@@ -6,7 +7,7 @@ export const mockOffers: Offer[] = [
         id: 'nat-001',
         businessName: '247GBS Digital',
         headline: '🚀 Boost Your Business Today',
-        description: 'Join the MCOM network and turn your storefront into a digital billboard.',
+        description: 'Join the MCOMQ network and turn your storefront into a digital billboard.',
         mediaType: 'image',
         imageUrl: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&q=80',
         ctaType: 'redirect',
@@ -26,14 +27,14 @@ export const mockOffers: Offer[] = [
     },
     {
         id: 'nat-002',
-        businessName: 'MCOM Corporate',
+        businessName: 'MCOMQ Corporate',
         headline: '🛍️ National High Street Week',
         description: 'Celebrating local commerce across the country. Support your high street!',
         mediaType: 'image',
         imageUrl: 'https://images.unsplash.com/photo-1534452207293-9979c193c315?w=800&q=80',
         ctaType: 'redirect',
         ctaLabel: 'Find Events',
-        redirectUrl: 'https://mcomlinks.com/events',
+        redirectUrl: 'https://mcomqlinks.com/events',
         isActive: true,
         isPremium: false,
         season: 'all',

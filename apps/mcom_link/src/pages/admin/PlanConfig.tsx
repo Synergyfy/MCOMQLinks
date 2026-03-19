@@ -95,8 +95,16 @@ export default function PlanConfig() {
                                     {/* Max Offers */}
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <div>
-                                            <div style={{ fontWeight: 800, fontSize: '0.95rem' }}>How many offers?</div>
-                                            <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Limit for hyperlocal campaigns</div>
+                                            <div style={{ fontWeight: 800, fontSize: '0.95rem' }}>
+                                                {plan.id === 'plan-hyperlocal' ? 'Local Campaign Limit' : 
+                                                 plan.id === 'plan-nearby' ? 'Expansion Capacity' : 
+                                                 'Network Slot Limit'}
+                                            </div>
+                                            <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                                {plan.id === 'plan-hyperlocal' ? 'Limit for local postcode ads' : 
+                                                 plan.id === 'plan-nearby' ? 'Max active multi-district ads' : 
+                                                 'Total concurrent system slots'}
+                                            </div>
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                             <button 
@@ -164,7 +172,7 @@ export default function PlanConfig() {
                                     {/* Weight Limit */}
                                     <div>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                                            <div style={{ fontWeight: 800, fontSize: '0.95rem' }}>Rotator "Power" Limit</div>
+                                            <div style={{ fontWeight: 800, fontSize: '0.95rem' }}>Display Priority Limit</div>
                                             <div style={{ fontWeight: 800, color: plan.color }}>{plan.rotatorWeightLimit}%</div>
                                         </div>
                                         <input 

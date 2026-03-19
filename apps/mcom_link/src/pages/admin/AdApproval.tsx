@@ -102,7 +102,7 @@ export default function AdApprovalPage() {
                         <td>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', fontWeight: 700 }}>
-                              <span>ROTATOR WEIGHT</span>
+                              <span>PRIORITY WEIGHT</span>
                               <span>{ad.rotatorWeight || 100}%</span>
                             </div>
                             <input 
@@ -114,7 +114,7 @@ export default function AdApprovalPage() {
                               className="admin-slider"
                             />
                             <p style={{ fontSize: '0.6rem', color: '#64748b', margin: 0 }}>
-                              {ad.rotatorWeight && ad.rotatorWeight > 80 ? '🔥 High Priority' : 'Standard Rotation'}
+                              {ad.rotatorWeight && ad.rotatorWeight > 80 ? '🔥 High Priority' : 'Standard Sequence'}
                             </p>
                           </div>
                         </td>

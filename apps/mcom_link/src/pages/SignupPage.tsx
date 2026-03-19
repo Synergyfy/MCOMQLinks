@@ -8,6 +8,7 @@ const SignupPage: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false)
     const [name, setName] = useState('')
     const [email, setEmail] = useState('')
+    const [postalCode, setPostalCode] = useState('')
     const [password, setPassword] = useState('')
     const [confirmPassword, setConfirmPassword] = useState('')
     const [error, setError] = useState<string | null>(null)
@@ -26,9 +27,14 @@ const SignupPage: React.FC = () => {
         }
 
         try {
-            // Note: Currently pointing to a mock/placeholder registration endpoint
-            // This will need to be implemented on the backend
-            await api.post<any>('/auth/register', { name, email, password, role: 'BUSINESS' })
+            // Register with postal code for targeting
+            await api.post<any>('/auth/register', { 
+                name, 
+                email, 
+                password, 
+                postalCode,
+                role: 'BUSINESS' 
+            })
 
             setSuccess(true)
             setTimeout(() => {
@@ -113,6 +119,17 @@ const SignupPage: React.FC = () => {
                                 placeholder="hello@business.com"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
+                                required
+                            />
+                        </div>
+                        <div className="auth-input-group">
+                            <label className="auth-label">Postal Code</label>
+                            <input
+                                type="text"
+                                className="auth-input"
+                                placeholder="E.g. SW1A 1AA"
+                                value={postalCode}
+                                onChange={(e) => setPostalCode(e.target.value)}
                                 required
                             />
                         </div>

@@ -94,17 +94,31 @@ function App() {
 
           <div className={`nav-links ${isMenuOpen ? 'open' : ''}`}>
             {['Home', 'Platform', 'Solutions', 'Pricing', 'About'].map((tab) => (
-              <a
-                key={tab}
-                href={`#${tab.toLowerCase()}`}
-                className={`nav-link ${activeTab === tab ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveTab(tab);
-                  setIsMenuOpen(false);
-                }}
-              >
-                {tab}
-              </a>
+              tab === 'Pricing' ? (
+                <Link
+                  key={tab}
+                  to="/pricing"
+                  className={`nav-link ${activeTab === tab ? 'active' : ''}`}
+                  onClick={() => {
+                    setActiveTab(tab);
+                    setIsMenuOpen(false);
+                  }}
+                >
+                  {tab}
+                </Link>
+              ) : (
+                <a
+                  key={tab}
+                  href={`#${tab.toLowerCase()}`}
+                  className={`nav-link ${activeTab === tab ? 'active' : ''}`}
+                  onClick={() => {
+                    setActiveTab(tab);
+                    setIsMenuOpen(false);
+                  }}
+                >
+                  {tab}
+                </a>
+              )
             ))}
             <div className="mobile-auth">
               <Link to="/login" className="btn-ghost" onClick={() => setIsMenuOpen(false)}>Sign In</Link>

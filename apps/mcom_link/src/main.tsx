@@ -19,6 +19,7 @@ import ConfirmationPage from './pages/ConfirmationPage.tsx'
 import FallbackPage from './pages/FallbackPage.tsx'
 import LoginPage from './pages/LoginPage.tsx'
 import SignupPage from './pages/SignupPage.tsx'
+import PricingPage from './pages/PricingPage.tsx'
 
 // Dashboard Pages
 import DashboardHome from './pages/dashboard/DashboardHome.tsx'
@@ -53,6 +54,7 @@ createRoot(document.getElementById('root')!).render(
       <Routes>
         {/* Marketing Homepage */}
         <Route path="/" element={<App />} />
+        <Route path="/pricing" element={<PricingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
 

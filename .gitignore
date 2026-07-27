@@ -9,7 +9,6 @@ dist
 out
 
 # IDE
-.vscode
 .idea
 
 # OS
@@ -17,6 +16,5 @@ out
 Thumbs.db
 
 # Environment
-.env
-.env.local
 .env.*.local
+config.bat

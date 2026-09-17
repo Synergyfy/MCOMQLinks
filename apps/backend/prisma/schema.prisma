@@ -22,6 +22,8 @@ model User {
   mcomRefreshToken   String?
   mcomPermissions    String?
   autoRenew          Boolean          @default(true)
+  membership         Membership?
+  membershipPayments MembershipPayment[]
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
 }
@@ -157,11 +159,12 @@ model SeasonalRule {
   updatedAt DateTime @updatedAt
 }
 
-// MCOM Ecosystem: centrally-managed plans (CRUD via /api/v1/system/plans).
-// Follows the MCOM Solutions plan contract (guide: Plans CRUD & Centralized In-App Payments).
+// MCOM Unified Membership & Plan Architecture
+// Plan Family (e.g. Starter, Hyper-local, Nearby Expansion, National Network, Gold)
 model Plan {
   id                     String           @id @default(uuid())
   name                   String
+  slug                   String           @unique
   description            String?
   monthlyPrice           Float            @default(0)
   quarterlyPrice         Float            @default(0)
@@ -183,9 +186,89 @@ model Plan {
   paypalMonthlyPlanId    String?
   paypalQuarterlyPlanId  String?
   paypalAnnualPlanId     String?
+  variants               PlanVariant[]
   activeBusinesses       BusinessProfile[]
   createdAt              DateTime         @default(now())
   updatedAt              DateTime         @updatedAt
+}
+
+// Plan Tier Levels: STANDARD (90d), PRO (180d), PRO_PLUS (1 Calendar Year)
+model PlanTierLevel {
+  id             String        @id @default(uuid())
+  name           String        @unique // STANDARD | PRO | PRO_PLUS
+  sortOrder      Int
+  durationDays   Int?          // 90 | 180 | null
+  isCalendarYear Boolean       @default(false)
+  variants       PlanVariant[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+
+// Plan Variant: The atomic sellable unit (1 Plan Family x 1 Plan Tier Level)
+model PlanVariant {
+  id            String        @id @default(uuid())
+  planId        String
+  plan          Plan          @relation(fields: [planId], references: [id], onDelete: Cascade)
+  tierLevelId   String
+  tierLevel     PlanTierLevel @relation(fields: [tierLevelId], references: [id])
+  isActive      Boolean       @default(true)
+  features      String        @default("[]") // JSON array of strings
+  limitations   String        @default("[]") // JSON array of strings
+  configuration String        @default("{}") // JSON { quotas, featureFlags, disabledNavIds }
+  prices        PlanPrice[]
+  memberships   Membership[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+// Plan Price: Immutable, versioned pricing record
+model PlanPrice {
+  id            String        @id @default(uuid())
+  planVariantId String
+  planVariant   PlanVariant   @relation(fields: [planVariantId], references: [id], onDelete: Cascade)
+  currency      String        @default("GBP")
+  amount        Float
+  stripePriceId String?
+  paypalPlanId  String?
+  isActive      Boolean       @default(true)
+  effectiveFrom DateTime      @default(now())
+  effectiveTo   DateTime?
+  memberships   Membership[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+// Membership: 1:1 active subscription per user
+model Membership {
+  id            String             @id @default(uuid())
+  userId        String             @unique
+  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planVariantId String
+  planVariant   PlanVariant        @relation(fields: [planVariantId], references: [id])
+  priceId       String?
+  price         PlanPrice?         @relation(fields: [priceId], references: [id])
+  isActive      Boolean            @default(true)
+  isTrial       Boolean            @default(false)
+  startDate     DateTime           @default(now())
+  expiresAt     DateTime
+  endDate       DateTime
+  paymentId     String?
+  payment       MembershipPayment? @relation(fields: [paymentId], references: [id])
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+}
+
+// MembershipPayment: Verified payment record
+model MembershipPayment {
+  id            String       @id @default(uuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount        Float
+  currency      String       @default("GBP")
+  paymentMethod String       // mcom_wallet | stripe | paypal
+  transactionId String       @unique
+  memberships   Membership[]
+  createdAt     DateTime     @default(now())
 }
 
 model CmsSetting {

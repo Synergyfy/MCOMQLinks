@@ -1,151 +1,160 @@
 import { useEffect, useMemo, useState } from 'react'
 import AdminLayout from '../../components/AdminLayout'
-import { getPlans, getPlanSchema, createPlan, updatePlan, deletePlan, type PlanSchema, type PlanInput } from '../../api/plans'
-import type { Plan } from '../../types'
+import {
+    getPlans,
+    getPlanSchema,
+    createPlan,
+    updatePlan,
+    deletePlan,
+    repriceVariant,
+    type PlanSchema,
+    type PlanInput,
+    type VariantInput,
+} from '../../api/plans'
+import type { Plan, PlanTierLevelName, PlanVariant } from '../../types'
 
-interface PlanFormState {
-    name: string
-    description: string
-    tagline: string
-    bestFor: string
-    isFree: boolean
-    monthlyPrice: number
-    quarterlyPrice: number
-    annualPrice: number
+interface VariantFormState {
+    price: number
     features: string[]
     limitations: string[]
     quotas: Record<string, number | boolean>
     featureFlags: Record<string, boolean>
+    stripePriceId: string
+    paypalPlanId: string
+}
+
+interface PlanFormState {
+    name: string
+    slug: string
+    description: string
+    tagline: string
+    bestFor: string
+    isFree: boolean
     isActive: boolean
     isDefault: boolean
     type: 'STANDARD' | 'TRIAL' | 'SEASONAL'
     trialDuration: number | undefined
     seasonId: string | undefined
-    stripeMonthlyPriceId: string
-    stripeQuarterlyPriceId: string
-    stripeAnnualPriceId: string
-    paypalMonthlyPlanId: string
-    paypalQuarterlyPlanId: string
-    paypalAnnualPlanId: string
+    variants: {
+        STANDARD: VariantFormState
+        PRO: VariantFormState
+        PRO_PLUS: VariantFormState
+    }
 }
 
-const emptyForm = (schema: PlanSchema | null): PlanFormState => {
+const emptyVariant = (schema: PlanSchema | null, defaultPrice = 0): VariantFormState => {
     const quotas: Record<string, number | boolean> = {}
     const featureFlags: Record<string, boolean> = {}
     schema?.quotas.forEach(q => { quotas[q.key] = q.type === 'boolean' ? false : 0 })
     schema?.featureFlags.forEach(f => { featureFlags[f.key] = false })
     return {
-        name: '',
-        description: '',
-        tagline: '',
-        bestFor: '',
-        isFree: false,
-        monthlyPrice: 0,
-        quarterlyPrice: 0,
-        annualPrice: 0,
+        price: defaultPrice,
         features: [],
         limitations: [],
         quotas,
         featureFlags,
-        isActive: true,
-        isDefault: false,
-        type: 'STANDARD',
-        trialDuration: undefined,
-        seasonId: undefined,
-        stripeMonthlyPriceId: '',
-        stripeQuarterlyPriceId: '',
-        stripeAnnualPriceId: '',
-        paypalMonthlyPlanId: '',
-        paypalQuarterlyPlanId: '',
-        paypalAnnualPlanId: '',
+        stripePriceId: '',
+        paypalPlanId: '',
     }
 }
 
+const slugify = (text: string) =>
+    text.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+
+const emptyForm = (schema: PlanSchema | null): PlanFormState => ({
+    name: '',
+    slug: '',
+    description: '',
+    tagline: '',
+    bestFor: '',
+    isFree: false,
+    isActive: true,
+    isDefault: false,
+    type: 'STANDARD',
+    trialDuration: undefined,
+    seasonId: undefined,
+    variants: {
+        STANDARD: emptyVariant(schema, 0),
+        PRO: emptyVariant(schema, 0),
+        PRO_PLUS: emptyVariant(schema, 0),
+    },
+})
+
 const toForm = (plan: Plan, schema: PlanSchema | null): PlanFormState => {
     const base = emptyForm(schema)
-    const quotas = { ...base.quotas }
-    const featureFlags = { ...base.featureFlags }
-    schema?.quotas.forEach(q => {
-        if (plan.configuration?.quotas?.[q.key] !== undefined) quotas[q.key] = plan.configuration.quotas[q.key]
+    const variantsState = { ...base.variants }
+
+    const findVariant = (tier: PlanTierLevelName): PlanVariant | undefined =>
+        plan.variants?.find(v => v.tier === tier || v.tierLevel?.name === tier)
+
+    ;(['STANDARD', 'PRO', 'PRO_PLUS'] as PlanTierLevelName[]).forEach(tier => {
+        const v = findVariant(tier)
+        const vState = emptyVariant(schema, v ? v.price : tier === 'PRO' ? plan.quarterlyPrice : tier === 'PRO_PLUS' ? plan.annualPrice : plan.monthlyPrice)
+        if (v) {
+            vState.features = v.features || []
+            vState.limitations = v.limitations || []
+            schema?.quotas.forEach(q => {
+                if (v.configuration?.quotas?.[q.key] !== undefined) vState.quotas[q.key] = v.configuration.quotas[q.key]
+            })
+            schema?.featureFlags.forEach(f => {
+                if (v.configuration?.featureFlags?.[f.key] !== undefined) vState.featureFlags[f.key] = v.configuration.featureFlags[f.key]
+            })
+            vState.stripePriceId = v.activePrice?.stripePriceId || ''
+            vState.paypalPlanId = v.activePrice?.paypalPlanId || ''
+        } else {
+            // Fallback from top-level plan fields
+            vState.features = plan.features || []
+            vState.limitations = plan.limitations || []
+            schema?.quotas.forEach(q => {
+                if (plan.configuration?.quotas?.[q.key] !== undefined) vState.quotas[q.key] = plan.configuration.quotas[q.key]
+            })
+            schema?.featureFlags.forEach(f => {
+                if (plan.configuration?.featureFlags?.[f.key] !== undefined) vState.featureFlags[f.key] = plan.configuration.featureFlags[f.key]
+            })
+        }
+        variantsState[tier] = vState
     })
-    schema?.featureFlags.forEach(f => {
-        if (plan.configuration?.featureFlags?.[f.key] !== undefined) featureFlags[f.key] = plan.configuration.featureFlags[f.key]
-    })
+
     return {
         name: plan.name,
+        slug: plan.slug || slugify(plan.name),
         description: plan.description || '',
         tagline: plan.tagline || '',
         bestFor: plan.bestFor || '',
         isFree: !!plan.isFree,
-        monthlyPrice: plan.monthlyPrice,
-        quarterlyPrice: plan.quarterlyPrice,
-        annualPrice: plan.annualPrice,
-        features: plan.features || [],
-        limitations: plan.limitations || [],
-        quotas,
-        featureFlags,
         isActive: plan.isActive,
         isDefault: plan.isDefault,
         type: plan.type,
         trialDuration: plan.trialDuration,
         seasonId: plan.seasonId,
-        stripeMonthlyPriceId: plan.stripeMonthlyPriceId || '',
-        stripeQuarterlyPriceId: plan.stripeQuarterlyPriceId || '',
-        stripeAnnualPriceId: plan.stripeAnnualPriceId || '',
-        paypalMonthlyPlanId: plan.paypalMonthlyPlanId || '',
-        paypalQuarterlyPlanId: plan.paypalQuarterlyPlanId || '',
-        paypalAnnualPlanId: plan.paypalAnnualPlanId || '',
+        variants: variantsState,
     }
 }
 
-const toInput = (form: PlanFormState): PlanInput => ({
-    name: form.name,
-    description: form.description || undefined,
-    tagline: form.tagline || undefined,
-    bestFor: form.bestFor || undefined,
-    isFree: form.isFree,
-    monthlyPrice: form.isFree ? 0 : form.monthlyPrice,
-    quarterlyPrice: form.isFree ? 0 : form.quarterlyPrice,
-    annualPrice: form.isFree ? 0 : form.annualPrice,
-    features: form.features,
-    limitations: form.limitations,
-    configuration: { quotas: form.quotas, featureFlags: form.featureFlags },
-    isActive: form.isActive,
-    isDefault: form.isDefault,
-    type: form.type,
-    trialDuration: form.type === 'TRIAL' ? form.trialDuration : undefined,
-    seasonId: form.type === 'SEASONAL' ? form.seasonId : undefined,
-    stripeMonthlyPriceId: form.stripeMonthlyPriceId || undefined,
-    stripeQuarterlyPriceId: form.stripeQuarterlyPriceId || undefined,
-    stripeAnnualPriceId: form.stripeAnnualPriceId || undefined,
-    paypalMonthlyPlanId: form.paypalMonthlyPlanId || undefined,
-    paypalQuarterlyPlanId: form.paypalQuarterlyPlanId || undefined,
-    paypalAnnualPlanId: form.paypalAnnualPlanId || undefined,
-})
-
 const inputCls: React.CSSProperties = {
     width: '100%',
-    padding: '0.85rem',
+    padding: '0.75rem',
     borderRadius: '0.75rem',
     border: '1px solid #e2e8f0',
-    fontSize: '0.95rem',
+    fontSize: '0.9rem',
     background: '#fff',
     color: '#0f172a',
 }
 const labelCls: React.CSSProperties = {
     display: 'block',
-    fontSize: '0.8rem',
+    fontSize: '0.75rem',
     fontWeight: 800,
     color: '#64748b',
-    marginBottom: '0.5rem',
+    marginBottom: '0.4rem',
     textTransform: 'uppercase',
+    letterSpacing: '0.025em',
 }
 const cardCls: React.CSSProperties = {
     background: '#fff',
-    padding: '2rem',
+    padding: '1.75rem',
     borderRadius: '1.5rem',
     border: '1px solid #e2e8f0',
-    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)',
 }
 
 function formatMoney(value: number): string {
@@ -160,22 +169,28 @@ export default function PlanConfig() {
     const [saving, setSaving] = useState(false)
     const [saved, setSaved] = useState<string | null>(null)
 
+    // Modal Wizard State
     const [showModal, setShowModal] = useState(false)
     const [editingId, setEditingId] = useState<string | null>(null)
+    const [wizardStep, setWizardStep] = useState<1 | 2>(1)
     const [form, setForm] = useState<PlanFormState>(() => emptyForm(null))
     const [formError, setFormError] = useState<string | null>(null)
-    const [activeSection, setActiveSection] = useState<'general' | 'pricing' | 'quotas' | 'features' | 'featureflags'>('general')
+    const [activeVariantTab, setActiveVariantTab] = useState<PlanTierLevelName>('STANDARD')
 
+    // Reprice Quick Modal
+    const [repriceModalVariant, setRepriceModalVariant] = useState<{ planName: string; variant: PlanVariant } | null>(null)
+    const [repriceAmount, setRepriceAmount] = useState<number>(0)
+    const [repricing, setRepricing] = useState(false)
+
+    // Delete Modal
     const [confirmDelete, setConfirmDelete] = useState<Plan | null>(null)
     const [deleting, setDeleting] = useState(false)
 
-    const sections = useMemo(() => [
-        { id: 'general', label: 'General' },
-        { id: 'pricing', label: 'Pricing' },
-        { id: 'quotas', label: 'Quotas & Access' },
-        { id: 'features', label: 'Features' },
-        { id: 'featureflags', label: 'Feature Flags' },
-    ] as const, [])
+    const tiers = useMemo(() => [
+        { id: 'STANDARD' as const, label: 'Standard', duration: '90 Days', icon: '⚡' },
+        { id: 'PRO' as const, label: 'Pro', duration: '180 Days', icon: '🚀' },
+        { id: 'PRO_PLUS' as const, label: 'Pro+', duration: '1 Calendar Year', icon: '👑' },
+    ], [])
 
     const load = async () => {
         setLoading(true)
@@ -197,7 +212,8 @@ export default function PlanConfig() {
         setEditingId(null)
         setForm(emptyForm(schema))
         setFormError(null)
-        setActiveSection('general')
+        setWizardStep(1)
+        setActiveVariantTab('STANDARD')
         setShowModal(true)
     }
 
@@ -205,47 +221,123 @@ export default function PlanConfig() {
         setEditingId(plan.id)
         setForm(toForm(plan, schema))
         setFormError(null)
-        setActiveSection('general')
+        setWizardStep(1)
+        setActiveVariantTab('STANDARD')
         setShowModal(true)
     }
 
     const updateForm = (patch: Partial<PlanFormState>) => {
-        setForm(prev => ({ ...prev, ...patch }))
+        setForm(prev => {
+            const next = { ...prev, ...patch }
+            if (patch.name && !editingId && (!prev.slug || prev.slug === slugify(prev.name))) {
+                next.slug = slugify(patch.name)
+            }
+            return next
+        })
+    }
+
+    const updateVariant = (tier: PlanTierLevelName, patch: Partial<VariantFormState>) => {
+        setForm(prev => ({
+            ...prev,
+            variants: {
+                ...prev.variants,
+                [tier]: {
+                    ...prev.variants[tier],
+                    ...patch,
+                },
+            },
+        }))
     }
 
     const handleSave = async () => {
         setFormError(null)
         if (!form.name.trim()) {
             setFormError('Plan name is required.')
-            setActiveSection('general')
+            setWizardStep(1)
+            return
+        }
+        if (!form.slug.trim()) {
+            setFormError('Plan slug is required.')
+            setWizardStep(1)
             return
         }
         if (form.type === 'TRIAL' && (!form.trialDuration || form.trialDuration <= 0)) {
             setFormError('TRIAL plans must have a positive trial duration (days).')
-            setActiveSection('general')
+            setWizardStep(1)
             return
         }
         if (form.type === 'SEASONAL' && !form.seasonId) {
-            setFormError('SEASONAL plans require a season. Create a season under Seasonal Campaigns first.')
-            setActiveSection('general')
+            setFormError('SEASONAL plans require a season ID.')
+            setWizardStep(1)
             return
         }
+
         setSaving(true)
         try {
-            const input = toInput(form)
+            const variantsArray: VariantInput[] = (['STANDARD', 'PRO', 'PRO_PLUS'] as PlanTierLevelName[]).map(tier => {
+                const v = form.variants[tier]
+                return {
+                    tier,
+                    price: form.isFree ? 0 : Number(v.price || 0),
+                    features: v.features,
+                    limitations: v.limitations,
+                    configuration: {
+                        quotas: v.quotas,
+                        featureFlags: v.featureFlags,
+                    },
+                    stripePriceId: v.stripePriceId || undefined,
+                    paypalPlanId: v.paypalPlanId || undefined,
+                }
+            })
+
+            const input: PlanInput = {
+                name: form.name.trim(),
+                slug: form.slug.trim(),
+                description: form.description.trim() || undefined,
+                tagline: form.tagline.trim() || undefined,
+                bestFor: form.bestFor.trim() || undefined,
+                isFree: form.isFree,
+                isActive: form.isActive,
+                isDefault: form.isDefault,
+                type: form.type,
+                trialDuration: form.type === 'TRIAL' ? form.trialDuration : undefined,
+                seasonId: form.type === 'SEASONAL' ? form.seasonId : undefined,
+                variants: variantsArray,
+            }
+
             if (editingId) {
                 await updatePlan(editingId, input)
             } else {
                 await createPlan(input)
             }
+
             setShowModal(false)
-            setSaved('Plan saved successfully.')
-            setTimeout(() => setSaved(null), 3000)
+            setSaved(`Plan "${form.name}" saved with Standard, Pro, and Pro+ variants.`)
+            setTimeout(() => setSaved(null), 4000)
             await load()
         } catch (e: any) {
             setFormError(e?.message || 'Failed to save plan.')
         } finally {
             setSaving(false)
+        }
+    }
+
+    const handleRepriceSubmit = async () => {
+        if (!repriceModalVariant) return
+        setRepricing(true)
+        try {
+            await repriceVariant(repriceModalVariant.variant.id, {
+                amount: Number(repriceAmount),
+                currency: 'GBP',
+            })
+            setSaved(`Repriced ${repriceModalVariant.planName} (${repriceModalVariant.variant.tier}) to £${Number(repriceAmount).toFixed(2)}. Old price archived.`)
+            setTimeout(() => setSaved(null), 4000)
+            setRepriceModalVariant(null)
+            await load()
+        } catch (e: any) {
+            setError(e?.message || 'Failed to reprice variant.')
+        } finally {
+            setRepricing(false)
         }
     }
 
@@ -266,50 +358,40 @@ export default function PlanConfig() {
         }
     }
 
-    const addFeature = () => updateForm({ features: [...form.features, ''] })
-    const updateFeature = (idx: number, value: string) => {
-        const features = [...form.features]
-        features[idx] = value
-        updateForm({ features })
+    // Feature bullet helpers for active variant
+    const currentVariant = form.variants[activeVariantTab]
+    const addFeature = () => updateVariant(activeVariantTab, { features: [...currentVariant.features, ''] })
+    const updateFeature = (idx: number, val: string) => {
+        const features = [...currentVariant.features]
+        features[idx] = val
+        updateVariant(activeVariantTab, { features })
     }
     const removeFeature = (idx: number) => {
-        updateForm({ features: form.features.filter((_, i) => i !== idx) })
-    }
-
-    const addLimitation = () => updateForm({ limitations: [...form.limitations, ''] })
-    const updateLimitation = (idx: number, value: string) => {
-        const limitations = [...form.limitations]
-        limitations[idx] = value
-        updateForm({ limitations })
-    }
-    const removeLimitation = (idx: number) => {
-        updateForm({ limitations: form.limitations.filter((_, i) => i !== idx) })
-    }
-
-    const quotaSummary = (plan: Plan): string[] => {
-        const q = plan.configuration?.quotas || {}
-        return Object.entries(q)
-            .filter(([, v]) => typeof v === 'number')
-            .slice(0, 3)
-            .map(([k, v]) => `${k}: ${v === -1 ? '∞' : v}`)
+        updateVariant(activeVariantTab, { features: currentVariant.features.filter((_, i) => i !== idx) })
     }
 
     return (
         <AdminLayout title="Plan Management Studio">
             <div style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
-                {/* Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+                {/* Header Banner */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
                     <div>
-                        <h2 style={{ fontSize: '1.5rem', fontWeight: 900, color: '#0f172a', margin: 0 }}>Subscription Plans</h2>
-                        <p style={{ color: '#64748b', margin: '0.25rem 0 0 0', fontSize: '0.9rem' }}>
-                            Configure what each plan allows. These plans sync with the MCOM Solutions console via <code>/api/v1/system/plans</code>.
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <h2 style={{ fontSize: '1.6rem', fontWeight: 900, color: '#0f172a', margin: 0 }}>Unified Membership Plans</h2>
+                            <span style={{ background: '#dbeafe', color: '#1e40af', padding: '0.2rem 0.6rem', borderRadius: '100px', fontSize: '0.75rem', fontWeight: 800 }}>
+                                3-Variant Architecture
+                            </span>
+                        </div>
+                        <p style={{ color: '#64748b', margin: '0.35rem 0 0 0', fontSize: '0.9rem' }}>
+                            Every plan family contains Standard (90d), Pro (180d), and Pro+ (1yr) variants with immutable versioned pricing.
                         </p>
                     </div>
                     <button
                         onClick={openCreate}
-                        style={{ padding: '0.75rem 1.5rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '0.75rem', fontWeight: 800, cursor: 'pointer', fontSize: '0.9rem' }}
+                        style={{ padding: '0.75rem 1.5rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '0.75rem', fontWeight: 800, cursor: 'pointer', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
                     >
-                        + Create Plan
+                        <span>+</span>
+                        <span>Create Plan Family</span>
                     </button>
                 </div>
 
@@ -328,135 +410,181 @@ export default function PlanConfig() {
                     <div style={{ textAlign: 'center', padding: '4rem', color: '#64748b' }}>Loading plans…</div>
                 ) : plans.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '4rem', color: '#64748b', border: '2px dashed #e2e8f0', borderRadius: '1.5rem' }}>
-                        No plans yet. Click <b>+ Create Plan</b> to add your first plan.
+                        No plans created yet. Click <b>+ Create Plan Family</b> to add your first plan.
                     </div>
                 ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}>
-                        {plans.map(plan => (
-                            <div key={plan.id} style={{ ...cardCls, display: 'flex', flexDirection: 'column', gap: '0.75rem', border: plan.isDefault ? '2px solid #2563eb' : '1px solid #e2e8f0' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                    <div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 900, color: '#0f172a' }}>{plan.name}</h3>
-                                            {plan.isDefault && <span style={{ background: '#eff6ff', color: '#1d4ed8', fontSize: '0.6rem', fontWeight: 900, padding: '2px 8px', borderRadius: '100px', border: '1px solid #bfdbfe' }}>DEFAULT</span>}
-                                            {plan.isFree && <span style={{ background: '#ecfdf5', color: '#059669', fontSize: '0.6rem', fontWeight: 900, padding: '2px 8px', borderRadius: '100px', border: '1px solid #a7f3d0' }}>FREE</span>}
-                                            {plan.type === 'TRIAL' && <span style={{ background: '#fefce8', color: '#a16207', fontSize: '0.6rem', fontWeight: 900, padding: '2px 8px', borderRadius: '100px', border: '1px solid #fde68a' }}>TRIAL</span>}
-                                            {plan.type === 'SEASONAL' && <span style={{ background: '#fdf2f8', color: '#be185d', fontSize: '0.6rem', fontWeight: 900, padding: '2px 8px', borderRadius: '100px', border: '1px solid #fbcfe8' }}>SEASONAL</span>}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: '1.75rem' }}>
+                        {plans.map(plan => {
+                            const standardV = plan.variants?.find(v => v.tier === 'STANDARD')
+                            const proV = plan.variants?.find(v => v.tier === 'PRO')
+                            const proPlusV = plan.variants?.find(v => v.tier === 'PRO_PLUS')
+
+                            return (
+                                <div key={plan.id} style={{ ...cardCls, display: 'flex', flexDirection: 'column', gap: '1rem', border: plan.isDefault ? '2px solid #2563eb' : '1px solid #e2e8f0' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                        <div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: '#0f172a' }}>{plan.name}</h3>
+                                                {plan.isDefault && <span style={{ background: '#eff6ff', color: '#1d4ed8', fontSize: '0.65rem', fontWeight: 900, padding: '2px 8px', borderRadius: '100px', border: '1px solid #bfdbfe' }}>DEFAULT</span>}
+                                                {plan.isFree && <span style={{ background: '#ecfdf5', color: '#059669', fontSize: '0.65rem', fontWeight: 900, padding: '2px 8px', borderRadius: '100px', border: '1px solid #a7f3d0' }}>FREE</span>}
+                                            </div>
+                                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontFamily: 'monospace', marginTop: '0.2rem' }}>
+                                                /{plan.slug}
+                                            </div>
                                         </div>
-                                        <div style={{ color: plan.isActive ? '#10b981' : '#94a3b8', fontSize: '0.75rem', fontWeight: 700, marginTop: '0.25rem' }}>
+                                        <span style={{ fontSize: '0.75rem', fontWeight: 800, color: plan.isActive ? '#059669' : '#94a3b8', background: plan.isActive ? '#ecfdf5' : '#f1f5f9', padding: '0.25rem 0.6rem', borderRadius: '100px' }}>
                                             {plan.isActive ? '● Active' : '○ Archived'}
+                                        </span>
+                                    </div>
+
+                                    {plan.description && <p style={{ margin: 0, color: '#64748b', fontSize: '0.85rem', lineHeight: '1.5' }}>{plan.description}</p>}
+
+                                    {/* 3-Variant Pricing Strip */}
+                                    <div style={{ background: '#f8fafc', borderRadius: '1rem', padding: '0.85rem 1rem', border: '1px solid #f1f5f9', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', textAlign: 'center' }}>
+                                        <div>
+                                            <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 800 }}>⚡ Standard (90d)</div>
+                                            <div style={{ fontSize: '1.05rem', fontWeight: 900, color: '#0f172a', marginTop: '0.2rem' }}>
+                                                {plan.isFree ? 'Free' : formatMoney(standardV?.price ?? plan.monthlyPrice)}
+                                            </div>
+                                            {standardV && !plan.isFree && (
+                                                <button
+                                                    onClick={() => { setRepriceModalVariant({ planName: plan.name, variant: standardV }); setRepriceAmount(standardV.price); }}
+                                                    style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer', marginTop: '0.2rem', padding: 0 }}
+                                                >
+                                                    Reprice
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div style={{ borderLeft: '1px solid #e2e8f0', borderRight: '1px solid #e2e8f0' }}>
+                                            <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 800 }}>🚀 Pro (180d)</div>
+                                            <div style={{ fontSize: '1.05rem', fontWeight: 900, color: '#0f172a', marginTop: '0.2rem' }}>
+                                                {plan.isFree ? 'Free' : formatMoney(proV?.price ?? plan.quarterlyPrice)}
+                                            </div>
+                                            {proV && !plan.isFree && (
+                                                <button
+                                                    onClick={() => { setRepriceModalVariant({ planName: plan.name, variant: proV }); setRepriceAmount(proV.price); }}
+                                                    style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer', marginTop: '0.2rem', padding: 0 }}
+                                                >
+                                                    Reprice
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <div style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 800 }}>👑 Pro+ (1yr)</div>
+                                            <div style={{ fontSize: '1.05rem', fontWeight: 900, color: '#0f172a', marginTop: '0.2rem' }}>
+                                                {plan.isFree ? 'Free' : formatMoney(proPlusV?.price ?? plan.annualPrice)}
+                                            </div>
+                                            {proPlusV && !plan.isFree && (
+                                                <button
+                                                    onClick={() => { setRepriceModalVariant({ planName: plan.name, variant: proPlusV }); setRepriceAmount(proPlusV.price); }}
+                                                    style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer', marginTop: '0.2rem', padding: 0 }}
+                                                >
+                                                    Reprice
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
-                                    <div style={{ textAlign: 'right' }}>
-                                        {plan.isFree ? (
-                                            <div style={{ fontWeight: 900, color: '#059669' }}>Free</div>
-                                        ) : (
-                                            <>
-                                                <div style={{ fontWeight: 900, color: '#0f172a' }}>{formatMoney(plan.monthlyPrice)}<span style={{ fontSize: '0.7rem', color: '#64748b', fontWeight: 600 }}>/mo</span></div>
-                                                {plan.annualPrice > 0 && <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{formatMoney(plan.annualPrice)}/yr</div>}
-                                            </>
-                                        )}
+
+                                    {/* Action Buttons */}
+                                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto', paddingTop: '0.75rem', borderTop: '1px solid #f1f5f9' }}>
+                                        <button onClick={() => openEdit(plan)} style={{ flex: 1, padding: '0.65rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '0.75rem', fontWeight: 800, cursor: 'pointer', fontSize: '0.85rem' }}>
+                                            Configure Plan & Variants
+                                        </button>
+                                        <button onClick={() => setConfirmDelete(plan)} style={{ padding: '0.65rem 1rem', background: '#fff', color: '#ef4444', border: '1px solid #fecaca', borderRadius: '0.75rem', fontWeight: 800, cursor: 'pointer', fontSize: '0.85rem' }}>
+                                            Archive
+                                        </button>
                                     </div>
                                 </div>
-
-                                {plan.description && <p style={{ margin: 0, color: '#64748b', fontSize: '0.85rem', lineHeight: '1.5' }}>{plan.description}</p>}
-
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                                    {quotaSummary(plan).map((q, i) => (
-                                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#475569' }}>
-                                            <span style={{ textTransform: 'capitalize' }}>{q.split(':')[0].replace(/([A-Z])/g, ' $1')}</span>
-                                            <span style={{ fontWeight: 800 }}>{q.split(':')[1]}</span>
-                                        </div>
-                                    ))}
-                                </div>
-
-                                {plan.features && plan.features.length > 0 && (
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-                                        {plan.features.slice(0, 4).map((f, i) => (
-                                            <span key={i} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', padding: '2px 8px', borderRadius: '100px', fontSize: '0.7rem', color: '#475569' }}>{f}</span>
-                                        ))}
-                                        {plan.features.length > 4 && <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>+{plan.features.length - 4} more</span>}
-                                    </div>
-                                )}
-
-                                <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid #f1f5f9' }}>
-                                    <button onClick={() => openEdit(plan)} style={{ flex: 1, padding: '0.6rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '0.6rem', fontWeight: 800, cursor: 'pointer', fontSize: '0.8rem' }}>
-                                        Configure
-                                    </button>
-                                    <button onClick={() => setConfirmDelete(plan)} style={{ padding: '0.6rem 1rem', background: '#fff', color: '#ef4444', border: '1px solid #fecaca', borderRadius: '0.6rem', fontWeight: 800, cursor: 'pointer', fontSize: '0.8rem' }}>
-                                        Archive
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
+                            )
+                        })}
                     </div>
                 )}
             </div>
 
-            {/* ── Create / Edit Modal ── */}
+            {/* ── 2-STEP PLAN CREATION / CONFIGURATION WIZARD MODAL ── */}
             {showModal && (
                 <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)' }}>
-                    <div style={{ background: '#fff', borderRadius: '1.5rem', width: '100%', maxWidth: '760px', maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.25)' }}>
-                        {/* Modal header */}
-                        <div style={{ padding: '1.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ background: '#fff', borderRadius: '1.5rem', width: '100%', maxWidth: '900px', maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.25)' }}>
+                        {/* Header */}
+                        <div style={{ padding: '1.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
                             <div>
-                                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 900, color: '#0f172a' }}>{editingId ? `Configure ${form.name || 'Plan'}` : 'Create New Plan'}</h3>
-                                <p style={{ margin: '0.25rem 0 0', color: '#64748b', fontSize: '0.8rem' }}>Define pricing, quotas, and what this plan can do.</p>
+                                <h3 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 900, color: '#0f172a' }}>
+                                    {editingId ? `Configure ${form.name || 'Plan'}` : 'Create Plan (1 Plan + 3 Variants)'}
+                                </h3>
+                                <p style={{ margin: '0.2rem 0 0', color: '#64748b', fontSize: '0.8rem' }}>
+                                    {wizardStep === 1 ? 'Step 1: General Plan Information' : 'Step 2: Standard (90d), Pro (180d) & Pro+ (1yr) Variant Configurations'}
+                                </p>
                             </div>
                             <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: '1.5rem', lineHeight: 1 }}>×</button>
                         </div>
 
-                        {/* Section tabs */}
-                        <div style={{ padding: '0.75rem 1.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: '0.5rem', flexWrap: 'wrap', background: '#f8fafc' }}>
-                            {sections.map(s => (
-                                <button
-                                    key={s.id}
-                                    onClick={() => setActiveSection(s.id)}
-                                    style={{
-                                        padding: '0.5rem 1rem',
-                                        borderRadius: '100px',
-                                        border: activeSection === s.id ? '1px solid #2563eb' : '1px solid #e2e8f0',
-                                        background: activeSection === s.id ? '#eff6ff' : '#fff',
-                                        color: activeSection === s.id ? '#1d4ed8' : '#64748b',
-                                        fontWeight: 800,
-                                        fontSize: '0.75rem',
-                                        cursor: 'pointer',
-                                    }}
-                                >
-                                    {s.label}
-                                </button>
-                            ))}
+                        {/* Step Navigation Pill Bar */}
+                        <div style={{ padding: '0.75rem 1.5rem', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: '0.75rem', background: '#fff' }}>
+                            <button
+                                onClick={() => setWizardStep(1)}
+                                style={{
+                                    padding: '0.45rem 1rem',
+                                    borderRadius: '100px',
+                                    border: wizardStep === 1 ? '1px solid #2563eb' : '1px solid #e2e8f0',
+                                    background: wizardStep === 1 ? '#eff6ff' : '#fff',
+                                    color: wizardStep === 1 ? '#1d4ed8' : '#64748b',
+                                    fontWeight: 800,
+                                    fontSize: '0.8rem',
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                1. General Info
+                            </button>
+                            <button
+                                onClick={() => setWizardStep(2)}
+                                style={{
+                                    padding: '0.45rem 1rem',
+                                    borderRadius: '100px',
+                                    border: wizardStep === 2 ? '1px solid #2563eb' : '1px solid #e2e8f0',
+                                    background: wizardStep === 2 ? '#eff6ff' : '#fff',
+                                    color: wizardStep === 2 ? '#1d4ed8' : '#64748b',
+                                    fontWeight: 800,
+                                    fontSize: '0.8rem',
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                2. Variant Configurations (3 Tiers)
+                            </button>
                         </div>
 
-                        {/* Body */}
-                        <div style={{ padding: '1.5rem', overflowY: 'auto', flex: 1 }}>
+                        {/* Modal Body */}
+                        <div style={{ padding: '1.75rem', overflowY: 'auto', flex: 1 }}>
                             {formError && (
-                                <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', padding: '0.75rem 1rem', borderRadius: '0.75rem', fontSize: '0.8rem', fontWeight: 700, marginBottom: '1rem' }}>
+                                <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', padding: '0.75rem 1rem', borderRadius: '0.75rem', fontSize: '0.85rem', fontWeight: 700, marginBottom: '1.25rem' }}>
                                     {formError}
                                 </div>
                             )}
 
-                            {activeSection === 'general' && (
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-                                    <div style={{ gridColumn: 'span 2' }}>
+                            {wizardStep === 1 ? (
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+                                    <div>
                                         <label style={labelCls}>Plan Name *</label>
-                                        <input style={inputCls} value={form.name} onChange={e => updateForm({ name: e.target.value })} placeholder="e.g. National Network" />
+                                        <input style={inputCls} value={form.name} onChange={e => updateForm({ name: e.target.value })} placeholder="e.g. Gold Plan" />
+                                    </div>
+                                    <div>
+                                        <label style={labelCls}>URL Slug *</label>
+                                        <input style={inputCls} value={form.slug} onChange={e => updateForm({ slug: e.target.value })} placeholder="e.g. gold-plan" />
                                     </div>
                                     <div style={{ gridColumn: 'span 2' }}>
                                         <label style={labelCls}>Description</label>
-                                        <textarea style={{ ...inputCls, minHeight: '70px', resize: 'vertical' }} value={form.description} onChange={e => updateForm({ description: e.target.value })} placeholder="Short summary shown on pricing pages" />
+                                        <textarea style={{ ...inputCls, minHeight: '60px', resize: 'vertical' }} value={form.description} onChange={e => updateForm({ description: e.target.value })} placeholder="Commercial summary shown to business owners" />
                                     </div>
-                                    <div style={{ gridColumn: 'span 2' }}>
-                                        <label style={labelCls}>Tagline (shown on the pricing card)</label>
+                                    <div>
+                                        <label style={labelCls}>Tagline</label>
                                         <input style={inputCls} value={form.tagline} onChange={e => updateForm({ tagline: e.target.value })} placeholder="e.g. Grow beyond your storefront" />
                                     </div>
-                                    <div style={{ gridColumn: 'span 2' }}>
+                                    <div>
                                         <label style={labelCls}>Best For</label>
-                                        <input style={inputCls} value={form.bestFor} onChange={e => updateForm({ bestFor: e.target.value })} placeholder="e.g. Businesses ready to scale" />
+                                        <input style={inputCls} value={form.bestFor} onChange={e => updateForm({ bestFor: e.target.value })} placeholder="e.g. High volume businesses" />
                                     </div>
                                     <div>
                                         <label style={labelCls}>Plan Type</label>
-                                        <select style={inputCls} value={form.type} onChange={e => updateForm({ type: e.target.value as PlanFormState['type'] })}>
+                                        <select style={inputCls} value={form.type} onChange={e => updateForm({ type: e.target.value as any })}>
                                             <option value="STANDARD">Standard</option>
                                             <option value="TRIAL">Trial</option>
                                             <option value="SEASONAL">Seasonal</option>
@@ -464,199 +592,230 @@ export default function PlanConfig() {
                                     </div>
                                     {form.type === 'TRIAL' && (
                                         <div>
-                                            <label style={labelCls}>Trial Duration (days)</label>
+                                            <label style={labelCls}>Trial Duration (Days)</label>
                                             <input style={inputCls} type="number" min={1} value={form.trialDuration ?? ''} onChange={e => updateForm({ trialDuration: e.target.value ? Number(e.target.value) : undefined })} />
                                         </div>
                                     )}
                                     {form.type === 'SEASONAL' && (
                                         <div>
-                                            <label style={labelCls}>Season</label>
-                                            <input style={inputCls} value={form.seasonId || ''} onChange={e => updateForm({ seasonId: e.target.value })} placeholder="Season UUID from Seasonal Campaigns" />
+                                            <label style={labelCls}>Season UUID</label>
+                                            <input style={inputCls} value={form.seasonId || ''} onChange={e => updateForm({ seasonId: e.target.value })} placeholder="Season rule ID" />
                                         </div>
                                     )}
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', paddingTop: '1rem', flexWrap: 'wrap' }}>
+                                    <div style={{ gridColumn: 'span 2', display: 'flex', gap: '1.5rem', paddingTop: '0.5rem', flexWrap: 'wrap' }}>
                                         <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 800, cursor: 'pointer' }}>
                                             <input type="checkbox" checked={form.isActive} onChange={e => updateForm({ isActive: e.target.checked })} />
-                                            Active
+                                            Active (Visible on Platform)
                                         </label>
                                         <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 800, cursor: 'pointer' }}>
                                             <input type="checkbox" checked={form.isDefault} onChange={e => updateForm({ isDefault: e.target.checked })} />
-                                            Default (fallback plan)
+                                            Default (Fallback Plan)
                                         </label>
                                         <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 800, cursor: 'pointer' }}>
                                             <input type="checkbox" checked={form.isFree} onChange={e => updateForm({ isFree: e.target.checked })} />
-                                            Free plan (prices forced to £0)
+                                            Free Plan (£0 Locked)
                                         </label>
                                     </div>
                                 </div>
-                            )}
-
-                            {activeSection === 'pricing' && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                    <div style={{ background: form.isFree ? '#fefce8' : '#f8fafc', border: `1px solid ${form.isFree ? '#fde68a' : '#e2e8f0'}`, padding: '1rem 1.25rem', borderRadius: '1rem', fontSize: '0.85rem', fontWeight: 700, color: form.isFree ? '#a16207' : '#64748b' }}>
-                                        {form.isFree
-                                            ? 'This plan is marked as FREE — all prices are locked to £0.'
-                                            : 'Set the monthly, quarterly and annual prices for this plan.'}
-                                    </div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem' }}>
-                                    <div>
-                                        <label style={labelCls}>Monthly (£)</label>
-                                        <input style={inputCls} type="number" min={0} step="0.01" disabled={form.isFree} value={form.monthlyPrice} onChange={e => updateForm({ monthlyPrice: Number(e.target.value) || 0 })} />
-                                    </div>
-                                    <div>
-                                        <label style={labelCls}>Quarterly (£)</label>
-                                        <input style={inputCls} type="number" min={0} step="0.01" disabled={form.isFree} value={form.quarterlyPrice} onChange={e => updateForm({ quarterlyPrice: Number(e.target.value) || 0 })} />
-                                    </div>
-                                    <div>
-                                        <label style={labelCls}>Annual (£)</label>
-                                        <input style={inputCls} type="number" min={0} step="0.01" disabled={form.isFree} value={form.annualPrice} onChange={e => updateForm({ annualPrice: Number(e.target.value) || 0 })} />
-                                    </div>
-                                    <div>
-                                        <label style={labelCls}>Stripe Monthly Price ID</label>
-                                        <input style={inputCls} value={form.stripeMonthlyPriceId} onChange={e => updateForm({ stripeMonthlyPriceId: e.target.value })} />
-                                    </div>
-                                    <div>
-                                        <label style={labelCls}>Stripe Quarterly Price ID</label>
-                                        <input style={inputCls} value={form.stripeQuarterlyPriceId} onChange={e => updateForm({ stripeQuarterlyPriceId: e.target.value })} />
-                                    </div>
-                                    <div>
-                                        <label style={labelCls}>Stripe Annual Price ID</label>
-                                        <input style={inputCls} value={form.stripeAnnualPriceId} onChange={e => updateForm({ stripeAnnualPriceId: e.target.value })} />
-                                    </div>
-                                    <div>
-                                        <label style={labelCls}>PayPal Monthly Plan ID</label>
-                                        <input style={inputCls} value={form.paypalMonthlyPlanId} onChange={e => updateForm({ paypalMonthlyPlanId: e.target.value })} />
-                                    </div>
-                                    <div>
-                                        <label style={labelCls}>PayPal Quarterly Plan ID</label>
-                                        <input style={inputCls} value={form.paypalQuarterlyPlanId} onChange={e => updateForm({ paypalQuarterlyPlanId: e.target.value })} />
-                                    </div>
-                                    <div>
-                                        <label style={labelCls}>PayPal Annual Plan ID</label>
-                                        <input style={inputCls} value={form.paypalAnnualPlanId} onChange={e => updateForm({ paypalAnnualPlanId: e.target.value })} />
-                                    </div>
-                                </div>
-                                </div>
-                            )}
-
-                            {activeSection === 'quotas' && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                    {(schema?.quotas || []).map(q => (
-                                        <div key={q.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', border: '1px solid #f1f5f9', borderRadius: '1rem' }}>
-                                            <div>
-                                                <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#0f172a' }}>{q.label}</div>
-                                                <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontFamily: 'monospace' }}>{q.key}</div>
-                                            </div>
-                                            {q.type === 'number' ? (
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                    <input
-                                                        type="number"
-                                                        min={-1}
-                                                        value={Number(form.quotas[q.key] ?? 0)}
-                                                        onChange={e => updateForm({ quotas: { ...form.quotas, [q.key]: Number(e.target.value) || 0 } })}
-                                                        style={{ width: '90px', padding: '0.5rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', textAlign: 'center', fontWeight: 800 }}
-                                                    />
-                                                    <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{q.unlimited ? '(-1 = unlimited)' : ''}</span>
-                                                </div>
-                                            ) : (
-                                                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', fontWeight: 800, cursor: 'pointer' }}>
-                                                    <input type="checkbox" checked={!!form.quotas[q.key]} onChange={e => updateForm({ quotas: { ...form.quotas, [q.key]: e.target.checked } })} />
-                                                    Enabled
-                                                </label>
-                                            )}
-                                        </div>
-                                    ))}
-                                    {(!schema || schema.quotas.length === 0) && <p style={{ color: '#94a3b8', fontSize: '0.85rem' }}>No quota fields configured in the plan schema.</p>}
-                                </div>
-                            )}
-
-                            {activeSection === 'features' && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <label style={labelCls}>Included Feature Bullets</label>
-                                            <button onClick={addFeature} style={{ background: '#2563eb', color: '#fff', border: 'none', padding: '0.4rem 0.9rem', borderRadius: '0.5rem', fontSize: '0.75rem', fontWeight: 800, cursor: 'pointer' }}>+ Add</button>
-                                        </div>
-                                        {form.features.map((f, i) => (
-                                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                <input style={inputCls} value={f} onChange={e => updateFeature(i, e.target.value)} placeholder={`e.g. Up to ${20 * (i + 1)} active campaigns`} />
-                                                <button onClick={() => removeFeature(i)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '1.1rem' }}>×</button>
-                                            </div>
+                            ) : (
+                                <div>
+                                    {/* 3-Variant Tab Switcher */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem', marginBottom: '1.5rem' }}>
+                                        {tiers.map(t => (
+                                            <button
+                                                key={t.id}
+                                                onClick={() => setActiveVariantTab(t.id)}
+                                                style={{
+                                                    padding: '0.75rem',
+                                                    borderRadius: '0.75rem',
+                                                    border: `2px solid ${activeVariantTab === t.id ? '#2563eb' : '#e2e8f0'}`,
+                                                    background: activeVariantTab === t.id ? '#eff6ff' : '#fff',
+                                                    color: activeVariantTab === t.id ? '#1d4ed8' : '#64748b',
+                                                    fontWeight: 800,
+                                                    fontSize: '0.85rem',
+                                                    cursor: 'pointer',
+                                                    textAlign: 'center',
+                                                }}
+                                            >
+                                                <div>{t.icon} {t.label}</div>
+                                                <div style={{ fontSize: '0.7rem', fontWeight: 600, opacity: 0.8 }}>{t.duration}</div>
+                                            </button>
                                         ))}
-                                        {form.features.length === 0 && <p style={{ color: '#94a3b8', fontSize: '0.85rem', fontStyle: 'italic' }}>No features listed yet.</p>}
                                     </div>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', paddingTop: '1rem', borderTop: '1px solid #f1f5f9' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <label style={labelCls}>Limitations (shown on the pricing card)</label>
-                                            <button onClick={addLimitation} style={{ background: '#64748b', color: '#fff', border: 'none', padding: '0.4rem 0.9rem', borderRadius: '0.5rem', fontSize: '0.75rem', fontWeight: 800, cursor: 'pointer' }}>+ Add</button>
-                                        </div>
-                                        {form.limitations.map((f, i) => (
-                                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                                <input style={inputCls} value={f} onChange={e => updateLimitation(i, e.target.value)} placeholder="e.g. No automatic renewal (expires after 90 days)" />
-                                                <button onClick={() => removeLimitation(i)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '1.1rem' }}>×</button>
-                                            </div>
-                                        ))}
-                                        {form.limitations.length === 0 && <p style={{ color: '#94a3b8', fontSize: '0.85rem', fontStyle: 'italic' }}>No limitations configured.</p>}
-                                    </div>
-                                </div>
-                            )}
 
-                            {activeSection === 'featureflags' && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                    {(schema?.featureFlags || []).map(f => (
-                                        <div key={f.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', border: '1px solid #f1f5f9', borderRadius: '1rem' }}>
+                                    {/* Active Variant Form */}
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                                        {/* Price & External IDs */}
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', background: '#f8fafc', padding: '1rem', borderRadius: '1rem', border: '1px solid #e2e8f0' }}>
                                             <div>
-                                                <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#0f172a' }}>{f.label}</div>
-                                                <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontFamily: 'monospace' }}>{f.key}</div>
-                                            </div>
-                                            <label style={{ position: 'relative', display: 'inline-block', width: '44px', height: '22px', cursor: 'pointer' }}>
+                                                <label style={labelCls}>One-off Price (£ GBP) *</label>
                                                 <input
-                                                    type="checkbox"
-                                                    checked={!!form.featureFlags[f.key]}
-                                                    onChange={e => updateForm({ featureFlags: { ...form.featureFlags, [f.key]: e.target.checked } })}
-                                                    style={{ opacity: 0, width: 0, height: 0 }}
+                                                    style={inputCls}
+                                                    type="number"
+                                                    min={0}
+                                                    step="0.01"
+                                                    disabled={form.isFree}
+                                                    value={form.isFree ? 0 : currentVariant.price}
+                                                    onChange={e => updateVariant(activeVariantTab, { price: Number(e.target.value) || 0 })}
                                                 />
-                                                <span style={{
-                                                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: '34px',
-                                                    backgroundColor: form.featureFlags[f.key] ? '#2563eb' : '#cbd5e1', transition: '.4s',
-                                                }}>
-                                                    <span style={{
-                                                        position: 'absolute', height: '16px', width: '16px', left: form.featureFlags[f.key] ? '24px' : '4px', bottom: '3px',
-                                                        backgroundColor: 'white', transition: '.4s', borderRadius: '50%',
-                                                    }} />
-                                                </span>
-                                            </label>
+                                            </div>
+                                            <div>
+                                                <label style={labelCls}>Stripe Price ID</label>
+                                                <input
+                                                    style={inputCls}
+                                                    value={currentVariant.stripePriceId}
+                                                    onChange={e => updateVariant(activeVariantTab, { stripePriceId: e.target.value })}
+                                                    placeholder="price_xxx"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label style={labelCls}>PayPal Plan ID</label>
+                                                <input
+                                                    style={inputCls}
+                                                    value={currentVariant.paypalPlanId}
+                                                    onChange={e => updateVariant(activeVariantTab, { paypalPlanId: e.target.value })}
+                                                    placeholder="P-xxx"
+                                                />
+                                            </div>
                                         </div>
-                                    ))}
-                                    {(!schema || schema.featureFlags.length === 0) && <p style={{ color: '#94a3b8', fontSize: '0.85rem' }}>No feature flags configured in the plan schema.</p>}
+
+                                        {/* Feature Bullets */}
+                                        <div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                                <label style={labelCls}>Marketing Feature Bullets ({activeVariantTab})</label>
+                                                <button onClick={addFeature} style={{ background: '#2563eb', color: '#fff', border: 'none', padding: '0.3rem 0.75rem', borderRadius: '0.5rem', fontSize: '0.75rem', fontWeight: 800, cursor: 'pointer' }}>+ Add Bullet</button>
+                                            </div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                                {currentVariant.features.map((f, i) => (
+                                                    <div key={i} style={{ display: 'flex', gap: '0.5rem' }}>
+                                                        <input style={inputCls} value={f} onChange={e => updateFeature(i, e.target.value)} placeholder="e.g. Up to 20 active campaigns on high street" />
+                                                        <button onClick={() => removeFeature(i)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '1.2rem', cursor: 'pointer' }}>×</button>
+                                                    </div>
+                                                ))}
+                                                {currentVariant.features.length === 0 && <span style={{ fontSize: '0.8rem', color: '#94a3b8', fontStyle: 'italic' }}>No features added for this tier yet.</span>}
+                                            </div>
+                                        </div>
+
+                                        {/* Quotas */}
+                                        <div>
+                                            <label style={labelCls}>Enforced Numeric Quotas ({activeVariantTab})</label>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                                                {(schema?.quotas || []).filter(q => q.type === 'number').map(q => (
+                                                    <div key={q.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', border: '1px solid #f1f5f9', borderRadius: '0.75rem' }}>
+                                                        <div>
+                                                            <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0f172a' }}>{q.label}</div>
+                                                            <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontFamily: 'monospace' }}>{q.key}</div>
+                                                        </div>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                                            <input
+                                                                type="number"
+                                                                min={-1}
+                                                                value={Number(currentVariant.quotas[q.key] ?? 0)}
+                                                                onChange={e => updateVariant(activeVariantTab, { quotas: { ...currentVariant.quotas, [q.key]: Number(e.target.value) || 0 } })}
+                                                                style={{ width: '80px', padding: '0.4rem', borderRadius: '0.5rem', border: '1px solid #e2e8f0', textAlign: 'center', fontWeight: 800 }}
+                                                            />
+                                                            <span style={{ fontSize: '0.65rem', color: '#94a3b8' }}>{q.unlimited ? '(-1 = ∞)' : ''}</span>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Feature Flags */}
+                                        <div>
+                                            <label style={labelCls}>Enforced Feature Flags ({activeVariantTab})</label>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                                                {(schema?.featureFlags || []).map(f => (
+                                                    <div key={f.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', border: '1px solid #f1f5f9', borderRadius: '0.75rem' }}>
+                                                        <div>
+                                                            <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0f172a' }}>{f.label}</div>
+                                                            <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontFamily: 'monospace' }}>{f.key}</div>
+                                                        </div>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={!!currentVariant.featureFlags[f.key]}
+                                                            onChange={e => updateVariant(activeVariantTab, { featureFlags: { ...currentVariant.featureFlags, [f.key]: e.target.checked } })}
+                                                            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                                                        />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
                         </div>
 
                         {/* Footer */}
-                        <div style={{ padding: '1.25rem 1.5rem', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', background: '#f8fafc' }}>
-                            <button onClick={() => setShowModal(false)} style={{ padding: '0.75rem 1.25rem', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '0.75rem', fontWeight: 800, cursor: 'pointer', color: '#475569' }}>
+                        <div style={{ padding: '1.25rem 1.75rem', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', background: '#f8fafc' }}>
+                            {wizardStep === 2 ? (
+                                <button onClick={() => setWizardStep(1)} style={{ padding: '0.65rem 1.25rem', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '0.75rem', fontWeight: 800, cursor: 'pointer', color: '#475569' }}>
+                                    ← Back to Step 1
+                                </button>
+                            ) : (
+                                <button onClick={() => setShowModal(false)} style={{ padding: '0.65rem 1.25rem', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '0.75rem', fontWeight: 800, cursor: 'pointer', color: '#475569' }}>
+                                    Cancel
+                                </button>
+                            )}
+
+                            {wizardStep === 1 ? (
+                                <button onClick={() => setWizardStep(2)} style={{ padding: '0.65rem 1.5rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '0.75rem', fontWeight: 800, cursor: 'pointer' }}>
+                                    Next: Configure Variants →
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={handleSave}
+                                    disabled={saving}
+                                    style={{ padding: '0.65rem 1.75rem', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '0.75rem', fontWeight: 800, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}
+                                >
+                                    {saving ? 'Saving 3-Variant Plan…' : editingId ? 'Save Changes' : 'Create 3-Variant Plan'}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── REPRICE VARIANT MODAL ── */}
+            {repriceModalVariant && (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)' }}>
+                    <div style={{ background: '#fff', borderRadius: '1.25rem', padding: '2rem', width: '100%', maxWidth: '440px', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.25)' }}>
+                        <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: '#0f172a' }}>
+                            Reprice {repriceModalVariant.planName} · {repriceModalVariant.variant.tier}
+                        </h3>
+                        <p style={{ color: '#64748b', fontSize: '0.85rem', lineHeight: '1.5', marginTop: '0.5rem' }}>
+                            This creates an immutable new price record. Existing active subscriptions retain their current price snapshot until renewal.
+                        </p>
+                        <div style={{ marginTop: '1.25rem' }}>
+                            <label style={labelCls}>New Amount (£ GBP)</label>
+                            <input
+                                style={inputCls}
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                value={repriceAmount}
+                                onChange={e => setRepriceAmount(Number(e.target.value) || 0)}
+                            />
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
+                            <button onClick={() => setRepriceModalVariant(null)} style={{ padding: '0.6rem 1.25rem', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '0.75rem', fontWeight: 800, cursor: 'pointer', color: '#475569' }}>
                                 Cancel
                             </button>
-                            <button
-                                onClick={handleSave}
-                                disabled={saving}
-                                style={{ padding: '0.75rem 1.5rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '0.75rem', fontWeight: 800, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}
-                            >
-                                {saving ? 'Saving…' : editingId ? 'Save Changes' : 'Create Plan'}
+                            <button onClick={handleRepriceSubmit} disabled={repricing} style={{ padding: '0.6rem 1.25rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '0.75rem', fontWeight: 800, cursor: 'pointer', opacity: repricing ? 0.6 : 1 }}>
+                                {repricing ? 'Saving…' : 'Apply New Price'}
                             </button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* ── Delete Confirm Modal ── */}
+            {/* ── ARCHIVE CONFIRM MODAL ── */}
             {confirmDelete && (
                 <div style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', background: 'rgba(0,0,0,0.6)' }}>
                     <div style={{ background: '#fff', borderRadius: '1.25rem', padding: '2rem', width: '100%', maxWidth: '420px', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.25)' }}>
                         <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 900, color: '#0f172a' }}>Archive "{confirmDelete.name}"?</h3>
                         <p style={{ color: '#64748b', fontSize: '0.9rem', lineHeight: '1.5', marginTop: '0.75rem' }}>
-                            The plan will be deactivated and hidden from purchase. Historical records are preserved.
+                            The plan family will be deactivated and hidden from purchase. Historical subscription records are preserved.
                         </p>
                         <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
                             <button onClick={() => setConfirmDelete(null)} style={{ padding: '0.6rem 1.25rem', background: '#fff', border: '1px solid #e2e8f0', borderRadius: '0.75rem', fontWeight: 800, cursor: 'pointer', color: '#475569' }}>

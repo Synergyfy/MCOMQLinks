@@ -24,10 +24,16 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { Roles } from '../../auth/roles.decorator';
 import { RolesGuard } from '../../auth/roles.guard';
+import { ActiveSubscriptionGuard } from '../../mcom/guards/active-subscription.guard';
+import { QuotaGuard } from '../../mcom/guards/quota.guard';
+import {
+  RequireActiveSubscription,
+  RequireQuota,
+} from '../../mcom/decorators/subscription.decorators';
 
 @ApiTags('Business Dashboard Offers')
 @Controller('dashboard/offers')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, ActiveSubscriptionGuard, QuotaGuard)
 @Roles('BUSINESS')
 @ApiBearerAuth()
 export class OffersController {
@@ -41,6 +47,7 @@ export class OffersController {
   }
 
   @Post()
+  @RequireQuota('maxOffers')
   @ApiOperation({ summary: 'Create a new offer' })
   @ApiResponse({
     status: 201,
@@ -60,6 +67,7 @@ export class OffersController {
   }
 
   @Patch(':id/status')
+  @RequireActiveSubscription()
   @ApiOperation({ summary: 'Update offer status (submit for review)' })
   @ApiResponse({ status: 200, description: 'Status updated.' })
   updateStatus(
@@ -79,6 +87,7 @@ export class OffersController {
   }
 
   @Patch(':id')
+  @RequireActiveSubscription()
   @ApiOperation({ summary: 'Update an existing offer' })
   @ApiResponse({ status: 200, description: 'The updated offer.' })
   update(

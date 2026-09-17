@@ -1,13 +1,28 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PurchaseService } from '../../mcom/purchase/purchase.service';
 import { AnalyticsDataDto, AnalyticsTimelineDto } from './dto/analytics.dto';
 
 @Injectable()
 export class AnalyticsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly purchaseService: PurchaseService,
+  ) {}
 
   async getAnalytics(userId: string): Promise<AnalyticsDataDto> {
     const businessName = await this.getBusinessName(userId);
+
+    // Feature Flag Check: advancedAnalytics
+    const membership = await this.purchaseService.getActiveMembership(userId);
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    const isAdmin = user?.role === 'ADMIN';
+    const hasAdvancedAnalytics =
+      isAdmin ||
+      Boolean(membership?.configuration?.featureFlags?.advancedAnalytics);
 
     const totalScans = await this.prisma.activity.count({
       where: { type: 'SCAN', offer: { businessName } },
@@ -18,6 +33,31 @@ export class AnalyticsService {
 
     const conversionRate =
       totalScans > 0 ? (totalClaims / totalScans) * 100 : 0;
+
+    const topOffersRaw = await this.prisma.offer.findMany({
+      where: { businessName },
+      take: 5,
+      orderBy: { scans: 'desc' },
+    });
+
+    const topOffers = topOffersRaw.map((offer: any) => ({
+      id: offer.id,
+      headline: offer.headline,
+      scans: offer.scans,
+      claims: offer.claims,
+    }));
+
+    if (!hasAdvancedAnalytics) {
+      return {
+        totalScans,
+        totalClaims,
+        conversionRate: parseFloat(conversionRate.toFixed(1)),
+        timeline: [],
+        topOffers,
+        recentEngagement: [],
+        hasAdvancedAnalytics: false,
+      };
+    }
 
     // Fetch activities for the last 7 days to build the timeline
     const sevenDaysAgo = new Date();
@@ -55,19 +95,6 @@ export class AnalyticsService {
       .map(([date, data]) => ({ date, ...data }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    const topOffersRaw = await this.prisma.offer.findMany({
-      where: { businessName },
-      take: 5,
-      orderBy: { scans: 'desc' },
-    });
-
-    const topOffers = topOffersRaw.map((offer: any) => ({
-      id: offer.id,
-      headline: offer.headline,
-      scans: offer.scans,
-      claims: offer.claims,
-    }));
-
     const recentEngagementRaw = await this.prisma.activity.findMany({
       where: { offer: { businessName } },
       take: 10,
@@ -90,6 +117,7 @@ export class AnalyticsService {
       timeline,
       topOffers,
       recentEngagement,
+      hasAdvancedAnalytics: true,
     };
   }
 

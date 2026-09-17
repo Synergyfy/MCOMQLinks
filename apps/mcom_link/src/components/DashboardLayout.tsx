@@ -1,6 +1,6 @@
 import { useState, useEffect, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { api } from '../api/apiClient'
+import { useMembership } from '../context/MembershipContext'
 import '../styles/dashboard.css'
 
 interface DashboardLayoutProps {
@@ -33,7 +33,15 @@ export default function DashboardLayout({ children, title }: DashboardLayoutProp
     const location = useLocation()
     const navigate = useNavigate()
     const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-    const [profile, setProfile] = useState<{name?: string, logoUrl?: string, ownerName?: string, plan?: string, subscriptionStatus?: string}>({})
+
+    const {
+        profile,
+        effectivePlanName,
+        effectiveStatus,
+        isExpired,
+        isPlanless,
+        loading: membershipLoading,
+    } = useMembership()
 
     let storedUser: { name?: string } | null = null;
     try {
@@ -43,65 +51,9 @@ export default function DashboardLayout({ children, title }: DashboardLayoutProp
         storedUser = null;
     }
 
-    useEffect(() => {
-        const fetchProfile = async () => {
-            try {
-                // Try to get from API first (legacy/other settings)
-                const data = await api.get<any>('/dashboard/settings')
-                
-                // Overlay local storage mocks for plan/status as requested by USER
-                const mockPlan = localStorage.getItem('mock_user_plan')
-                const mockStatus = localStorage.getItem('mock_user_status')
-
-                if (data) {
-                    setProfile({
-                        name: data.name,
-                        logoUrl: data.logoUrl,
-                        ownerName: data.ownerName,
-                        plan: mockPlan || data.plan || 'None',
-                        subscriptionStatus: mockStatus || data.subscriptionStatus || 'pending'
-                    })
-
-                    // If active plan is confirmed, ensure user permissions reflect links access
-                    if (data.subscriptionStatus === 'active' && data.plan && data.plan !== 'None') {
-                        try {
-                            const stored = localStorage.getItem('user')
-                            if (stored) {
-                                const parsed = JSON.parse(stored)
-                                if (!parsed.permissions?.canAccess_links) {
-                                    parsed.permissions = { ...(parsed.permissions || {}), canAccess_links: true }
-                                    localStorage.setItem('user', JSON.stringify(parsed))
-                                }
-                            }
-                        } catch {}
-                    }
-                }
-            } catch {
-                // Fallback to local storage if API fails
-                const mockPlan = localStorage.getItem('mock_user_plan')
-                const mockStatus = localStorage.getItem('mock_user_status')
-                setProfile({
-                    plan: mockPlan || 'None',
-                    subscriptionStatus: mockStatus || 'pending'
-                })
-            }
-        }
-        
-        fetchProfile()
-
-        // Listen for profile updates from other components (like BillingPage)
-        window.addEventListener('profile-updated', fetchProfile)
-        
-        return () => {
-            window.removeEventListener('profile-updated', fetchProfile)
-        }
-    }, [])
-
-    const isPlanless = !profile.plan || profile.plan === 'None';
-
     // ACTIVE PROTECTION: Redirect to billing if trying to access a locked page directly via URL
     useEffect(() => {
-        if (isPlanless && profile.plan !== undefined) { // Wait for first load
+        if (!membershipLoading && isPlanless) {
             const unlockedPaths = ['/dashboard/billing', '/dashboard/support'];
             const isCurrentlyOnLockedPath = !unlockedPaths.includes(location.pathname);
             
@@ -109,7 +61,7 @@ export default function DashboardLayout({ children, title }: DashboardLayoutProp
                 navigate('/dashboard/billing?first_time=true');
             }
         }
-    }, [isPlanless, location.pathname, profile.plan, navigate])
+    }, [isPlanless, membershipLoading, location.pathname, navigate])
 
     const handleLogout = () => {
         localStorage.removeItem('access_token')
@@ -220,17 +172,17 @@ export default function DashboardLayout({ children, title }: DashboardLayoutProp
                             <div className="db-user-name">{contactName}</div>
                             <div className="db-user-role" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
                                 <span>{brandName}</span>
-                                {profile.plan && profile.plan !== 'None' && (
+                                {effectivePlanName && (
                                     <span style={{
                                         fontSize: '0.65rem',
                                         fontWeight: 800,
-                                        background: '#2563eb',
+                                        background: isExpired ? '#ef4444' : '#2563eb',
                                         color: '#ffffff',
                                         padding: '0.1rem 0.4rem',
                                         borderRadius: '0.25rem',
                                         letterSpacing: '0.02em',
                                     }}>
-                                        {profile.plan}
+                                        {effectivePlanName}
                                     </span>
                                 )}
                             </div>
@@ -253,7 +205,7 @@ export default function DashboardLayout({ children, title }: DashboardLayoutProp
                     </div>
 
                     <div className="db-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        {profile.plan && profile.plan !== 'None' && (
+                        {effectivePlanName && (
                             <Link
                                 to="/dashboard/billing"
                                 style={{
@@ -265,25 +217,25 @@ export default function DashboardLayout({ children, title }: DashboardLayoutProp
                                     borderRadius: '999px',
                                     fontSize: '0.75rem',
                                     fontWeight: 800,
-                                    background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
-                                    color: '#1d4ed8',
-                                    border: '1px solid #bfdbfe',
+                                    background: isExpired ? '#fef2f2' : 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
+                                    color: isExpired ? '#dc2626' : '#1d4ed8',
+                                    border: isExpired ? '1px solid #fecaca' : '1px solid #bfdbfe',
                                     boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
                                 }}
                                 title="View Subscription Details"
                             >
-                                <span>⚡</span>
-                                <span>{profile.plan}</span>
+                                <span>{isExpired ? '⚠️' : '⚡'}</span>
+                                <span>{effectivePlanName}</span>
                             </Link>
                         )}
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                             <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>Status:</span>
                             <span className={`db-badge ${
-                                profile.subscriptionStatus === 'active' ? 'db-badge-approved' : 
-                                profile.subscriptionStatus === 'suspended' ? 'db-badge-expired' : 'db-badge-pending'
+                                effectiveStatus === 'active' ? 'db-badge-approved' : 
+                                effectiveStatus === 'expired' || effectiveStatus === 'suspended' ? 'db-badge-expired' : 'db-badge-pending'
                             }`}>
-                                {profile.subscriptionStatus ? profile.subscriptionStatus.charAt(0).toUpperCase() + profile.subscriptionStatus.slice(1) : 'Pending'}
+                                {effectiveStatus.charAt(0).toUpperCase() + effectiveStatus.slice(1)}
                             </span>
                         </div>
 
@@ -292,6 +244,42 @@ export default function DashboardLayout({ children, title }: DashboardLayoutProp
                         </button>
                     </div>
                 </header>
+
+                {/* Subscription Expired Warning Banner */}
+                {isExpired && (
+                    <div style={{
+                        background: 'linear-gradient(90deg, #fef2f2 0%, #fff1f2 100%)',
+                        borderBottom: '1px solid #fecaca',
+                        padding: '0.85rem 1.5rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '1rem',
+                        flexWrap: 'wrap',
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#991b1b', fontSize: '0.875rem', fontWeight: 600 }}>
+                            <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+                            <span>
+                                <strong>Subscription Expired:</strong> Your plan has lapsed and offers are paused from rotation. Renew your package to restore visibility.
+                            </span>
+                        </div>
+                        <Link
+                            to="/dashboard/billing"
+                            style={{
+                                background: '#dc2626',
+                                color: '#ffffff',
+                                padding: '0.45rem 1rem',
+                                borderRadius: '0.5rem',
+                                fontWeight: 800,
+                                fontSize: '0.8rem',
+                                textDecoration: 'none',
+                                whiteSpace: 'nowrap',
+                            }}
+                        >
+                            Renew Package →
+                        </Link>
+                    </div>
+                )}
 
                 <section className="db-content">
                     {children}

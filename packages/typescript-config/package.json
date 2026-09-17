@@ -6,7 +6,7 @@
     "base.json"
   ],
   "scripts": {
-    "build": "echo \"@mcom/typescript-config: nothing to build\"",
+    "build": "node init && echo \"@mcom/typescript-config: nothing to build\"",
     "lint": "echo \"@mcom/typescript-config: nothing to lint\""
   }
 }

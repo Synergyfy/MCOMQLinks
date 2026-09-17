@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../../api/apiClient'
 import { type Offer } from '../../mock/offers'
 import DashboardLayout from '../../components/DashboardLayout'
 import OfferCard from '../../components/OfferCard'
-
-// No longer need mock generator here, backend provides engagement stats
-
+import { useActiveMembership } from '../../hooks/useActiveMembership'
 
 export default function OffersPage() {
     const [filter, setFilter] = useState('all')
@@ -18,15 +17,22 @@ export default function OffersPage() {
     const [engagementStats, setEngagementStats] = useState<any>(null)
     const [mockActivities, setMockActivities] = useState<any[]>([])
 
+    const {
+        isActive,
+        isExpired,
+        quotas,
+    } = useActiveMembership()
+
+    const maxOffers = quotas?.maxOffers
+    const isUnlimited = maxOffers === undefined || maxOffers === null || maxOffers === -1
+    const isQuotaReached = !isUnlimited && offers.length >= (maxOffers as number)
+    const isCreateDisabled = !isActive || isExpired || isQuotaReached
+
     const fetchOffers = async () => {
         setLoading(true)
         try {
             const data = await api.get<Offer[]>(`/dashboard/offers${filter !== 'all' ? `?status=${filter}` : ''}`)
-            // Ensure data is array before setting, if backend is down it could be an object with error
             if (Array.isArray(data)) {
-                // Assuming backend returns all offers for business, frontend filtering if want 'all', but backend filtering is preferred
-                // Currently API filters all based on status, but we should make sure we only get business' offers ideally
-                // For now, assume backend returns correctly.
                 setOffers(data)
             } else {
                 setOffers([])
@@ -51,7 +57,6 @@ export default function OffersPage() {
             setMockActivities(stats.activities || [])
         } catch (err) {
             console.error('Failed to fetch stats:', err)
-            // Fallback for demo mostly if backend doesn't implement activities fully
             setMockActivities([])
         } finally {
             setStatsLoading(false)
@@ -94,15 +99,24 @@ export default function OffersPage() {
         redemptionInstructions: ''
     })
 
-    // Use state offers instead of mock
     const myOffers = offers
     const filteredOffers = myOffers
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
 
+        if (isCreateDisabled) {
+            alert(
+                isExpired
+                    ? 'Your subscription has expired. Please renew your plan to create offers.'
+                    : isQuotaReached
+                    ? `Offer limit reached for your plan (${offers.length}/${maxOffers}). Upgrade your plan to create more offers.`
+                    : 'Active subscription required.'
+            )
+            return
+        }
+
         try {
-            // Transform payload to match backend expectations
             const payload: any = {
                 headline: newOffer.headline,
                 description: newOffer.description,
@@ -128,14 +142,12 @@ export default function OffersPage() {
                 payload.leadDestination = newOffer.redemptionInstructions;
             }
 
-            // Client-side validation matching backend DTO rules
             const start = new Date(newOffer.startDate || Date.now());
             const end = new Date(newOffer.endDate || Date.now());
             if (end <= start) {
                 alert("Validation Error: End Date must be after Start Date.");
                 return;
             }
-
 
             if ((newOffer.exposureType === 'hyperlocal' || newOffer.exposureType === 'nearby') && newOffer.targetPostcode) {
                 const postcodeClean = newOffer.targetPostcode.trim().toUpperCase();
@@ -146,9 +158,7 @@ export default function OffersPage() {
                 }
             }
 
-            // Submit for approval
             await api.post('/dashboard/offers', payload)
-
 
             alert("Offer submitted successfully! It is now pending approval from our administration team. Once approved, it will automatically go live in the rotator.")
 
@@ -176,19 +186,56 @@ export default function OffersPage() {
                 redemptionInstructions: '' 
             })
 
-            // Refresh list
             fetchOffers()
 
-        } catch (err) {
+        } catch (err: any) {
             console.error("Failed to create offer:", err)
-            alert("Error creating offer")
+            const msg = err?.response?.data?.message || err?.message || "Error creating offer"
+            alert(msg)
         }
     }
 
     return (
         <DashboardLayout title="Offer Management">
+            {/* Quota & Plan Status Banner if quota reached or near limit */}
+            {isQuotaReached && (
+                <div style={{
+                    background: '#fffbeb',
+                    border: '1px solid #fef3c7',
+                    borderRadius: '0.75rem',
+                    padding: '0.85rem 1.25rem',
+                    marginBottom: '1.5rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '1rem',
+                    flexWrap: 'wrap',
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#92400e', fontSize: '0.875rem' }}>
+                        <span style={{ fontSize: '1.25rem' }}>🔒</span>
+                        <span>
+                            <strong>Offer Quota Reached ({offers.length}/{maxOffers}):</strong> You have published the maximum number of offers allowed on your current plan. Upgrade to increase your limit.
+                        </span>
+                    </div>
+                    <Link
+                        to="/dashboard/billing"
+                        style={{
+                            background: '#d97706',
+                            color: '#ffffff',
+                            padding: '0.4rem 0.9rem',
+                            borderRadius: '0.5rem',
+                            fontWeight: 800,
+                            fontSize: '0.8rem',
+                            textDecoration: 'none',
+                        }}
+                    >
+                        Upgrade Plan →
+                    </Link>
+                </div>
+            )}
+
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
-                <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', paddingBottom: '0.5rem', maxWidth: '100%', whiteSpace: 'nowrap' }}>
+                <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', paddingBottom: '0.5rem', maxWidth: '100%', whiteSpace: 'nowrap', alignItems: 'center' }}>
                     {['all', 'approved', 'submitted', 'draft', 'rejected', 'expired'].map((s) => (
                         <button
                             key={s}
@@ -199,11 +246,53 @@ export default function OffersPage() {
                             {s}
                         </button>
                     ))}
+
+                    {/* Quota Pill Badge */}
+                    <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        padding: '0.35rem 0.75rem',
+                        borderRadius: '999px',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        background: isQuotaReached ? '#fee2e2' : '#f1f5f9',
+                        color: isQuotaReached ? '#991b1b' : '#475569',
+                        border: isQuotaReached ? '1px solid #fca5a5' : '1px solid #e2e8f0',
+                        marginLeft: '0.5rem',
+                    }}>
+                        <span>📋</span>
+                        <span>
+                            Offers: <strong>{offers.length}</strong> / {isUnlimited ? '∞' : maxOffers}
+                        </span>
+                    </div>
                 </div>
 
-                <button className="db-btn db-btn-primary" onClick={() => setShowModal(true)}>
+                <button
+                    className="db-btn db-btn-primary"
+                    onClick={() => {
+                        if (isCreateDisabled) {
+                            if (isExpired) {
+                                alert('Your subscription has expired. Please renew your plan.');
+                            } else if (isQuotaReached) {
+                                alert(`Offer quota limit reached (${offers.length}/${maxOffers}). Upgrade your plan to create more offers.`);
+                            }
+                            return;
+                        }
+                        setShowModal(true);
+                    }}
+                    style={isCreateDisabled ? { opacity: 0.6, cursor: 'not-allowed', background: '#94a3b8' } : {}}
+                    title={
+                        isExpired
+                            ? 'Subscription expired. Renew to create offers.'
+                            : isQuotaReached
+                            ? `Quota reached (${offers.length}/${maxOffers}). Upgrade to create more.`
+                            : 'Create a new offer'
+                    }
+                >
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
                     Create Offer
+                    {isQuotaReached && <span style={{ marginLeft: '0.3rem', fontSize: '0.7rem' }}>🔒</span>}
                 </button>
             </div>
 

@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
   IsArray,
   IsBoolean,
@@ -10,6 +11,7 @@ import {
   IsOptional,
   IsString,
   Min,
+  ValidateNested,
 } from 'class-validator';
 
 export enum PlanType {
@@ -18,16 +20,86 @@ export enum PlanType {
   SEASONAL = 'SEASONAL',
 }
 
-export class PlanConfigurationDto {
-  @ApiPropertyOptional({ example: { maxListings: 100 } })
-  @IsObject()
-  @IsOptional()
-  quotas?: Record<string, number | boolean>;
+export enum PlanTier {
+  STANDARD = 'STANDARD',
+  PRO = 'PRO',
+  PRO_PLUS = 'PRO_PLUS',
+}
 
-  @ApiPropertyOptional({ example: { advancedAnalytics: true } })
+export interface PlanVariantConfiguration {
+  quotas: {
+    maxListings?: number; // -1 for unlimited
+    maxOffers?: number;
+    maxLocations?: number;
+    maxActiveCampaigns?: number;
+    allowProductListing?: boolean;
+    allowServiceListing?: boolean;
+    maxProducts?: number;
+    maxServices?: number;
+    maxGiftCardTemplates?: number;
+    maxCouponTemplates?: number;
+    maxLoyaltyPrograms?: number;
+    maxImagesPerListing?: number;
+    featuredListingAllowance?: number;
+    allowNearbyExpansion?: boolean;
+    allowNationalNetwork?: boolean;
+    [key: string]: any;
+  };
+  featureFlags: {
+    priorityInSearch?: boolean;
+    priorityBoost?: boolean;
+    advancedAnalytics?: boolean;
+    dedicatedSupport?: boolean;
+    allowCustomBranding?: boolean;
+    allowGroupCreation?: boolean;
+    allowThirdPartyPromotion?: boolean;
+    allowAutoRollover?: boolean;
+    allowExpoAccess?: boolean;
+    [key: string]: any;
+  };
+  disabledNavIds?: string[];
+}
+
+export class VariantConfigDto {
+  @ApiProperty({ enum: PlanTier, example: PlanTier.STANDARD })
+  @IsEnum(PlanTier)
+  tier: PlanTier;
+
+  @ApiProperty({ example: 49.99 })
+  @IsNumber()
+  price: number;
+
+  @ApiPropertyOptional({ example: ['1 Active Campaign', 'Standard Support'] })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  features?: string[];
+
+  @ApiPropertyOptional({ example: ['No Expo access'] })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  limitations?: string[];
+
+  @ApiPropertyOptional({
+    example: {
+      quotas: { maxActiveCampaigns: 5, maxOffers: 20 },
+      featureFlags: { priorityBoost: true, advancedAnalytics: true },
+    },
+  })
   @IsObject()
   @IsOptional()
-  featureFlags?: Record<string, boolean>;
+  configuration?: PlanVariantConfiguration;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  stripePriceId?: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  paypalPlanId?: string;
 }
 
 export class CreatePlanDto {
@@ -36,46 +108,17 @@ export class CreatePlanDto {
   @IsNotEmpty()
   name: string;
 
-  @ApiPropertyOptional({ example: 'For high-volume retail businesses' })
+  @ApiProperty({ example: 'gold-plan' })
+  @IsString()
+  @IsNotEmpty()
+  slug: string;
+
+  @ApiPropertyOptional({ example: 'Commercial package description' })
   @IsString()
   @IsOptional()
   description?: string;
 
-  @ApiProperty({ example: 49.99 })
-  @IsNumber()
-  @IsOptional()
-  monthlyPrice?: number;
-
-  @ApiProperty({ example: 129.99 })
-  @IsNumber()
-  @IsOptional()
-  quarterlyPrice?: number;
-
-  @ApiProperty({ example: 499.99 })
-  @IsNumber()
-  @IsOptional()
-  annualPrice?: number;
-
-  @ApiPropertyOptional({
-    example: ['Up to 100 listings', 'Custom domain support'],
-  })
-  @IsArray()
-  @IsString({ each: true })
-  @IsOptional()
-  features?: string[];
-
-  @ApiPropertyOptional({
-    example: ['No custom domain support', 'Standard visibility only'],
-  })
-  @IsArray()
-  @IsString({ each: true })
-  @IsOptional()
-  limitations?: string[];
-
-  @ApiPropertyOptional({
-    example: 'Grow beyond your storefront',
-    description: 'Short card tagline shown on pricing',
-  })
+  @ApiPropertyOptional({ example: 'Grow beyond your storefront' })
   @IsString()
   @IsOptional()
   tagline?: string;
@@ -85,18 +128,10 @@ export class CreatePlanDto {
   @IsOptional()
   bestFor?: string;
 
-  @ApiPropertyOptional({
-    default: false,
-    description: 'Free plans force all prices to 0',
-  })
+  @ApiPropertyOptional({ default: false })
   @IsBoolean()
   @IsOptional()
   isFree?: boolean;
-
-  @ApiPropertyOptional({ type: PlanConfigurationDto })
-  @IsObject()
-  @IsOptional()
-  configuration?: PlanConfigurationDto;
 
   @ApiPropertyOptional({ default: true })
   @IsBoolean()
@@ -119,12 +154,52 @@ export class CreatePlanDto {
   @IsOptional()
   trialDuration?: number;
 
-  @ApiPropertyOptional({
-    description: 'UUID of the season (required if type === SEASONAL)',
-  })
+  @ApiPropertyOptional({ description: 'UUID of season if SEASONAL' })
   @IsString()
   @IsOptional()
   seasonId?: string;
+
+  @ApiProperty({
+    type: [VariantConfigDto],
+    description: 'Exactly 3 variants: STANDARD, PRO, PRO_PLUS',
+  })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => VariantConfigDto)
+  variants: VariantConfigDto[];
+
+  // Fallback / legacy price & config support
+  @ApiPropertyOptional()
+  @IsNumber()
+  @IsOptional()
+  monthlyPrice?: number;
+
+  @ApiPropertyOptional()
+  @IsNumber()
+  @IsOptional()
+  quarterlyPrice?: number;
+
+  @ApiPropertyOptional()
+  @IsNumber()
+  @IsOptional()
+  annualPrice?: number;
+
+  @ApiPropertyOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  features?: string[];
+
+  @ApiPropertyOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  limitations?: string[];
+
+  @ApiPropertyOptional()
+  @IsObject()
+  @IsOptional()
+  configuration?: any;
 
   @ApiPropertyOptional()
   @IsString()
@@ -158,3 +233,24 @@ export class CreatePlanDto {
 }
 
 export class UpdatePlanDto extends PartialType(CreatePlanDto) {}
+
+export class RepriceVariantDto {
+  @ApiProperty({ example: 59.99 })
+  @IsNumber()
+  amount: number;
+
+  @ApiPropertyOptional({ default: 'GBP' })
+  @IsString()
+  @IsOptional()
+  currency?: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  stripePriceId?: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  paypalPlanId?: string;
+}

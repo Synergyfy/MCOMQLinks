@@ -8,12 +8,13 @@ import {
 import { loadStripe, type StripePaymentElementOptions } from '@stripe/stripe-js'
 import { api } from '../api/apiClient'
 import { MCOM_SOLUTIONS_URL, STRIPE_PUBLISHABLE_KEY, USE_MOCK } from '../api/constants'
-import type { BillingCycle, Plan } from '../types'
+import type { BillingCycle, Plan, PlanTierLevelName, PlanVariant } from '../types'
 
 export interface InitiatedCheckout {
     clientSecret: string
     type: 'payment' | 'setup'
     plan?: Plan
+    planVariantId?: string
 }
 
 interface WalletBalanceData {
@@ -26,9 +27,12 @@ interface WalletBalanceData {
 
 interface StripeCheckoutModalProps {
     plan: Plan
-    billingCycle: BillingCycle
+    variant?: PlanVariant | null
+    planVariantId?: string
+    selectedTier?: PlanTierLevelName
+    billingCycle?: BillingCycle
     price: number
-    cycleLabel: string
+    cycleLabel?: string
     onClose: () => void
     onSuccess: (pkg: any) => void
 }
@@ -40,19 +44,18 @@ const stripePromise: ReturnType<typeof loadStripe> | null = STRIPE_PUBLISHABLE_K
 // ─── STRIPE CARD CHECKOUT FORM ──────────────────────────────────────────────
 function StripeCheckoutForm({
     plan,
+    planVariantId,
     billingCycle,
     price,
-    cycleLabel: _cycleLabel,
-
     clientSecret,
     intentType,
     onClose,
     onSuccess,
 }: {
     plan: Plan
-    billingCycle: BillingCycle
+    planVariantId: string
+    billingCycle?: BillingCycle
     price: number
-    cycleLabel: string
     clientSecret: string
     intentType: 'payment' | 'setup'
     onClose: () => void
@@ -70,7 +73,6 @@ function StripeCheckoutForm({
         setLoading(true)
         setError(null)
 
-        // 1. Submit elements first to trigger validation and collect payment details
         const { error: submitError } = await elements.submit()
         if (submitError) {
             setError(submitError.message || 'Please check your payment details.')
@@ -86,9 +88,7 @@ function StripeCheckoutForm({
                 const result = await stripe.confirmSetup({
                     elements,
                     clientSecret,
-                    confirmParams: {
-                        return_url: returnUrl,
-                    },
+                    confirmParams: { return_url: returnUrl },
                     redirect: 'if_required',
                 })
                 intentError = result.error as { message?: string } | undefined
@@ -97,9 +97,7 @@ function StripeCheckoutForm({
                 const result = await stripe.confirmPayment({
                     elements,
                     clientSecret,
-                    confirmParams: {
-                        return_url: returnUrl,
-                    },
+                    confirmParams: { return_url: returnUrl },
                     redirect: 'if_required',
                 })
                 intentError = result.error as { message?: string } | undefined
@@ -121,8 +119,9 @@ function StripeCheckoutForm({
             const confirmed = await api.post<any>(
                 '/api/v1/mcom/packages/purchase/confirm',
                 {
+                    planVariantId,
                     externalPlanId: plan.id,
-                    billingCycle,
+                    billingCycle: billingCycle || 'monthly',
                     provider: 'stripe',
                     paymentIntentId,
                 },
@@ -136,7 +135,7 @@ function StripeCheckoutForm({
                 }
             } catch {}
             window.dispatchEvent(new CustomEvent('profile-updated'))
-            onSuccess(confirmed.package)
+            onSuccess(confirmed.package || confirmed.membership)
         } catch (err: any) {
             setError(err?.message || 'Payment succeeded but activation failed. Please try again.')
             setLoading(false)
@@ -144,10 +143,7 @@ function StripeCheckoutForm({
     }
 
     const elementOptions: StripePaymentElementOptions = {
-        layout: {
-            type: 'tabs',
-            defaultCollapsed: false,
-        },
+        layout: { type: 'tabs', defaultCollapsed: false },
     }
 
     return (
@@ -196,16 +192,25 @@ function StripeCheckoutForm({
     )
 }
 
-// ─── UNIFIED CHECKOUT MODAL (WALLET + STRIPE) ──────────────────────────────
+// ─── UNIFIED CHECKOUT MODAL (WALLET + STRIPE + PAYPAL) ──────────────────────
 export function StripeCheckoutModal({
     plan,
-    billingCycle,
+    variant,
+    planVariantId: passedVariantId,
+    selectedTier = 'STANDARD',
+    billingCycle = 'monthly',
     price,
-    cycleLabel,
+    cycleLabel: _cycleLabel,
     onClose,
     onSuccess,
 }: StripeCheckoutModalProps) {
-    const [selectedTab, setSelectedTab] = useState<'wallet' | 'card'>('wallet')
+    const [selectedTab, setSelectedTab] = useState<'wallet' | 'card' | 'paypal'>('wallet')
+
+    // Resolve active variant
+    const resolvedVariant = variant || plan.variants?.find(v => v.tier === selectedTier || v.tierLevel?.name === selectedTier)
+    const effectiveVariantId = passedVariantId || resolvedVariant?.id || plan.id
+
+    const tierLabel = selectedTier === 'PRO_PLUS' ? 'Pro+ (1 Calendar Year)' : selectedTier === 'PRO' ? 'Pro (180 Days)' : 'Standard (90 Days)'
 
     // Wallet State
     const [walletBalance, setWalletBalance] = useState<WalletBalanceData | null>(null)
@@ -220,9 +225,12 @@ export function StripeCheckoutModal({
     const [stripeInitError, setStripeInitError] = useState<string | null>(null)
     const [stripeInitiating, setStripeInitiating] = useState<boolean>(false)
 
+    // PayPal State
+    const [paypalInitiating, setPaypalInitiating] = useState<boolean>(false)
+    const [paypalError, setPaypalError] = useState<string | null>(null)
+
     const canUseElements = !!stripePromise && !USE_MOCK
 
-    // Fetch live user wallet balance from MCOM Central Hub
     const fetchWalletBalance = async (isManualRefresh = false) => {
         if (isManualRefresh) setRefreshingBalance(true)
         else setWalletLoading(true)
@@ -243,13 +251,13 @@ export function StripeCheckoutModal({
         fetchWalletBalance()
     }, [])
 
-    // Handle wallet purchase
     const handleWalletPurchase = async () => {
         setWalletPurchasing(true)
         setWalletError(null)
 
         try {
             const res = await api.post<any>('/api/v1/mcom/packages/purchase/wallet', {
+                planVariantId: effectiveVariantId,
                 externalPlanId: plan.id,
                 billingCycle,
             })
@@ -262,14 +270,15 @@ export function StripeCheckoutModal({
                 }
             } catch {}
             window.dispatchEvent(new CustomEvent('profile-updated'))
-            onSuccess(res.package)
+            onSuccess(res.package || res.membership)
         } catch (err: any) {
             setWalletError(err?.message || 'Wallet payment failed. Please check your balance.')
             setWalletPurchasing(false)
         }
     }
 
-    // Handle Stripe initiation when card tab is selected
+    const effectiveCycle: BillingCycle = billingCycle || (selectedTier === 'PRO_PLUS' ? 'annual' : selectedTier === 'PRO' ? 'quarterly' : 'monthly')
+
     const initiateStripeCheckout = async () => {
         setStripeInitError(null)
         setStripeInitiating(true)
@@ -277,8 +286,9 @@ export function StripeCheckoutModal({
             const initiated = await api.post<InitiatedCheckout>(
                 '/api/v1/mcom/packages/purchase/initiate',
                 {
+                    planVariantId: effectiveVariantId,
                     externalPlanId: plan.id,
-                    billingCycle,
+                    billingCycle: effectiveCycle,
                     provider: 'stripe',
                 },
             )
@@ -294,19 +304,56 @@ export function StripeCheckoutModal({
         }
     }
 
-    // Mock fallback confirm for offline dev testing
+    const handlePayPalInitiate = async () => {
+        setPaypalInitiating(true)
+        setPaypalError(null)
+        try {
+            const initiated = await api.post<any>(
+                '/api/v1/mcom/packages/purchase/initiate',
+                {
+                    planVariantId: effectiveVariantId,
+                    externalPlanId: plan.id,
+                    billingCycle: effectiveCycle,
+                    provider: 'paypal',
+                    returnUrl: `${window.location.origin}/dashboard/billing?paypal=success`,
+                    cancelUrl: `${window.location.origin}/dashboard/billing?paypal=cancel`,
+                },
+            )
+            if (initiated.approvalUrl) {
+                window.location.href = initiated.approvalUrl
+            } else {
+                // Fallback direct confirmation for sandbox/mock
+                const confirmed = await api.post<any>(
+                    '/api/v1/mcom/packages/purchase/confirm',
+                    {
+                        planVariantId: effectiveVariantId,
+                        externalPlanId: plan.id,
+                        billingCycle: effectiveCycle,
+                        provider: 'paypal',
+                        transactionId: initiated.orderId || `paypal_${Date.now()}`,
+                    },
+                )
+                onSuccess(confirmed.package || confirmed.membership)
+            }
+        } catch (err: any) {
+            setPaypalError(err?.message || 'Failed to initiate PayPal checkout.')
+            setPaypalInitiating(false)
+        }
+    }
+
     const handleFallbackConfirm = async () => {
         try {
             const confirmed = await api.post<any>(
                 '/api/v1/mcom/packages/purchase/confirm',
                 {
+                    planVariantId: effectiveVariantId,
                     externalPlanId: plan.id,
                     billingCycle,
                     provider: 'stripe',
                     paymentIntentId: 'mock_payment_' + Date.now(),
                 },
             )
-            onSuccess(confirmed.package)
+            onSuccess(confirmed.package || confirmed.membership)
         } catch (err: any) {
             setWalletError(err?.message || 'Payment failed.')
         }
@@ -321,7 +368,7 @@ export function StripeCheckoutModal({
                 className="db-modal"
                 onClick={(e) => e.stopPropagation()}
                 style={{
-                    maxWidth: '520px',
+                    maxWidth: '540px',
                     width: '95vw',
                     borderRadius: '1.25rem',
                     overflow: 'hidden',
@@ -343,10 +390,10 @@ export function StripeCheckoutModal({
                 >
                     <div>
                         <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#94a3b8', fontWeight: 700 }}>
-                            MCOM Ecosystem Checkout
+                            MCOM Ecosystem Unified Checkout
                         </div>
                         <h2 style={{ fontSize: '1.35rem', fontWeight: 800, margin: '0.2rem 0 0 0', color: '#fff' }}>
-                            Subscribe to {plan.name}
+                            {plan.name} · {selectedTier === 'PRO_PLUS' ? 'Pro+' : selectedTier === 'PRO' ? 'Pro' : 'Standard'}
                         </h2>
                     </div>
                     <button
@@ -379,11 +426,11 @@ export function StripeCheckoutModal({
                     alignItems: 'center',
                 }}>
                     <div>
-                        <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>
-                            Billing Cycle: <span style={{ textTransform: 'capitalize', color: '#0f172a' }}>{billingCycle}</span>
+                        <div style={{ fontSize: '0.85rem', color: '#0f172a', fontWeight: 700 }}>
+                            Commitment Duration: <span style={{ color: '#2563eb' }}>{tierLabel}</span>
                         </div>
-                        <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                            {plan.tagline || 'Full high street rotation & dynamic visibility'}
+                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                            One-off billing for full period · No lock-in
                         </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
@@ -391,7 +438,7 @@ export function StripeCheckoutModal({
                             {price === 0 ? 'Free' : `£${price.toFixed(2)}`}
                         </div>
                         <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>
-                            {price === 0 ? 'No charge' : `${price.toFixed(2)} MCOM Credits`}
+                            {price === 0 ? 'No charge' : `${price.toFixed(2)} MCOM`}
                         </div>
                     </div>
                 </div>
@@ -399,7 +446,7 @@ export function StripeCheckoutModal({
                 {/* Payment Method Selector Tabs */}
                 <div style={{
                     display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
+                    gridTemplateColumns: '1fr 1fr 1fr',
                     gap: '0.5rem',
                     padding: '1rem 1.75rem 0',
                 }}>
@@ -407,34 +454,22 @@ export function StripeCheckoutModal({
                         type="button"
                         onClick={() => setSelectedTab('wallet')}
                         style={{
-                            padding: '0.75rem',
+                            padding: '0.65rem',
                             borderRadius: '0.75rem',
                             border: '1px solid',
                             borderColor: selectedTab === 'wallet' ? '#2563eb' : '#e2e8f0',
                             background: selectedTab === 'wallet' ? '#eff6ff' : '#ffffff',
                             color: selectedTab === 'wallet' ? '#1d4ed8' : '#64748b',
                             fontWeight: 700,
-                            fontSize: '0.9rem',
+                            fontSize: '0.8rem',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: '0.5rem',
+                            gap: '0.35rem',
                             cursor: 'pointer',
-                            transition: 'all 0.15s ease',
                         }}
                     >
-                        <span>⚡</span>
-                        <span>MCOM Wallet</span>
-                        <span style={{
-                            background: selectedTab === 'wallet' ? '#2563eb' : '#e2e8f0',
-                            color: selectedTab === 'wallet' ? '#fff' : '#64748b',
-                            fontSize: '0.65rem',
-                            padding: '0.15rem 0.4rem',
-                            borderRadius: '100px',
-                            fontWeight: 800,
-                        }}>
-                            RECOMMENDED
-                        </span>
+                        <span>⚡ Wallet</span>
                     </button>
 
                     <button
@@ -446,24 +481,44 @@ export function StripeCheckoutModal({
                             }
                         }}
                         style={{
-                            padding: '0.75rem',
+                            padding: '0.65rem',
                             borderRadius: '0.75rem',
                             border: '1px solid',
                             borderColor: selectedTab === 'card' ? '#2563eb' : '#e2e8f0',
                             background: selectedTab === 'card' ? '#eff6ff' : '#ffffff',
                             color: selectedTab === 'card' ? '#1d4ed8' : '#64748b',
                             fontWeight: 700,
-                            fontSize: '0.9rem',
+                            fontSize: '0.8rem',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: '0.5rem',
+                            gap: '0.35rem',
                             cursor: 'pointer',
-                            transition: 'all 0.15s ease',
                         }}
                     >
-                        <span>💳</span>
-                        <span>Card (Stripe)</span>
+                        <span>💳 Card (Stripe)</span>
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => setSelectedTab('paypal')}
+                        style={{
+                            padding: '0.65rem',
+                            borderRadius: '0.75rem',
+                            border: '1px solid',
+                            borderColor: selectedTab === 'paypal' ? '#2563eb' : '#e2e8f0',
+                            background: selectedTab === 'paypal' ? '#eff6ff' : '#ffffff',
+                            color: selectedTab === 'paypal' ? '#1d4ed8' : '#64748b',
+                            fontWeight: 700,
+                            fontSize: '0.8rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.35rem',
+                            cursor: 'pointer',
+                        }}
+                    >
+                        <span>🅿️ PayPal</span>
                     </button>
                 </div>
 
@@ -472,7 +527,6 @@ export function StripeCheckoutModal({
                     {/* ─── TAB 1: MCOM CENTRALIZED WALLET ──────────────────────────── */}
                     {selectedTab === 'wallet' && (
                         <div>
-                            {/* Wallet Info Card */}
                             <div style={{
                                 background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
                                 border: '1px solid #bbf7d0',
@@ -483,7 +537,7 @@ export function StripeCheckoutModal({
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
                                     <div>
                                         <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#166534', fontWeight: 800 }}>
-                                            Centralized Mcom Wallet
+                                            MCOM Solutions Central Wallet
                                         </div>
                                         <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#14532d', marginTop: '0.1rem' }}>
                                             {walletLoading ? (
@@ -512,10 +566,8 @@ export function StripeCheckoutModal({
                                         }}
                                         title="Refresh Wallet Balance from Central Hub"
                                     >
-                                        <span style={{ display: 'inline-block', transform: refreshingBalance ? 'rotate(360deg)' : 'none', transition: 'transform 0.5s ease' }}>
-                                            🔄
-                                        </span>
-                                        {refreshingBalance ? 'Refreshing…' : 'Refresh'}
+                                        <span>🔄</span>
+                                        <span>{refreshingBalance ? 'Refreshing…' : 'Refresh'}</span>
                                     </button>
                                 </div>
 
@@ -541,11 +593,10 @@ export function StripeCheckoutModal({
                                 </div>
                             )}
 
-                            {/* Sufficient Balance -> One-Click Purchase */}
                             {hasSufficientWalletBalance ? (
                                 <div>
                                     <p style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '1.25rem', lineHeight: 1.5 }}>
-                                        Funds will be debited instantly from your Central MCOM Solutions Wallet. Your business subscription will activate immediately across the high-street network.
+                                        Funds will be debited instantly from your Central MCOM Solutions Wallet. Your membership and rotator slots will activate immediately.
                                     </p>
                                     <button
                                         type="button"
@@ -567,7 +618,6 @@ export function StripeCheckoutModal({
                                     </button>
                                 </div>
                             ) : (
-                                /* Insufficient Balance -> Top-Up Action */
                                 <div style={{
                                     background: '#fffbeb',
                                     border: '1px solid #fde68a',
@@ -575,48 +625,31 @@ export function StripeCheckoutModal({
                                     padding: '1rem',
                                     marginBottom: '1rem',
                                 }}>
-                                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
-                                        <span style={{ fontSize: '1.5rem' }}>⚠️</span>
-                                        <div>
-                                            <div style={{ fontWeight: 800, color: '#92400e', fontSize: '0.95rem' }}>
-                                                Insufficient Wallet Balance
-                                            </div>
-                                            <p style={{ fontSize: '0.8rem', color: '#b45309', margin: '0.25rem 0 0.75rem', lineHeight: 1.4 }}>
-                                                You need <b>{price.toFixed(2)} MCOM</b>, but currently have <b>{availableBalance.toFixed(2)} MCOM</b>.
-                                                Top up your wallet on the MCOM Solutions Central Hub, then click <b>Refresh Balance</b> below.
-                                            </p>
-                                            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                                <a
-                                                    href={`${MCOM_SOLUTIONS_URL}/dashboard`}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="db-btn db-btn-primary"
-                                                    style={{
-                                                        padding: '0.65rem 1rem',
-                                                        fontSize: '0.85rem',
-                                                        fontWeight: 700,
-                                                        background: '#d97706',
-                                                        borderColor: '#b45309',
-                                                        textDecoration: 'none',
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '0.35rem',
-                                                    }}
-                                                >
-                                                    <span>Top Up Wallet in Central Hub</span>
-                                                    <span>↗</span>
-                                                </a>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => fetchWalletBalance(true)}
-                                                    disabled={refreshingBalance}
-                                                    className="db-btn db-btn-ghost"
-                                                    style={{ padding: '0.65rem 1rem', fontSize: '0.85rem', fontWeight: 700 }}
-                                                >
-                                                    {refreshingBalance ? 'Checking…' : 'I have topped up, Refresh'}
-                                                </button>
-                                            </div>
-                                        </div>
+                                    <div style={{ fontWeight: 800, color: '#92400e', fontSize: '0.95rem' }}>
+                                        Insufficient Wallet Balance
+                                    </div>
+                                    <p style={{ fontSize: '0.8rem', color: '#b45309', margin: '0.25rem 0 0.75rem', lineHeight: 1.4 }}>
+                                        You need <b>{price.toFixed(2)} MCOM</b>, but currently have <b>{availableBalance.toFixed(2)} MCOM</b>.
+                                    </p>
+                                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                        <a
+                                            href={`${MCOM_SOLUTIONS_URL}/dashboard`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="db-btn db-btn-primary"
+                                            style={{ padding: '0.6rem 1rem', fontSize: '0.85rem', fontWeight: 700, textDecoration: 'none' }}
+                                        >
+                                            Top Up in Central Hub ↗
+                                        </a>
+                                        <button
+                                            type="button"
+                                            onClick={() => fetchWalletBalance(true)}
+                                            disabled={refreshingBalance}
+                                            className="db-btn db-btn-ghost"
+                                            style={{ padding: '0.6rem 1rem', fontSize: '0.85rem', fontWeight: 700 }}
+                                        >
+                                            Refresh Balance
+                                        </button>
                                     </div>
                                 </div>
                             )}
@@ -636,7 +669,6 @@ export function StripeCheckoutModal({
                     {/* ─── TAB 2: CREDIT / DEBIT CARD (STRIPE) ───────────────────────── */}
                     {selectedTab === 'card' && (
                         <div>
-                            {/* In mock mode or when Stripe is unavailable */}
                             {USE_MOCK ? (
                                 <div>
                                     <div style={{ padding: '1rem', background: '#eff6ff', borderRadius: '0.75rem', border: '1px solid #bfdbfe', marginBottom: '1rem' }}>
@@ -660,9 +692,9 @@ export function StripeCheckoutModal({
                                         <Elements stripe={stripePromise} options={{ clientSecret }}>
                                             <StripeCheckoutForm
                                                 plan={plan}
+                                                planVariantId={effectiveVariantId}
                                                 billingCycle={billingCycle}
                                                 price={price}
-                                                cycleLabel={cycleLabel}
                                                 clientSecret={clientSecret}
                                                 intentType={intentType}
                                                 onClose={onClose}
@@ -700,27 +732,13 @@ export function StripeCheckoutModal({
                                     )}
                                 </div>
                             ) : (
-                                /* Stripe Key Not Available on Server */
-                                <div style={{
-                                    padding: '1.25rem',
-                                    background: '#f8fafc',
-                                    border: '1px solid #e2e8f0',
-                                    borderRadius: '0.75rem',
-                                    textAlign: 'center',
-                                }}>
+                                <div style={{ padding: '1.25rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '0.75rem', textAlign: 'center' }}>
                                     <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>💳</div>
-                                    <div style={{ fontWeight: 700, color: '#334155', fontSize: '0.95rem' }}>
-                                        Card Payments Under Maintenance
-                                    </div>
+                                    <div style={{ fontWeight: 700, color: '#334155', fontSize: '0.95rem' }}>Card Payments Setup</div>
                                     <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '0.5rem 0 1.25rem' }}>
-                                        Card processing is currently undergoing setup. Please use your <b>MCOM Centralized Wallet</b> to complete this transaction seamlessly.
+                                        Please use your <b>MCOM Centralized Wallet</b> to complete this transaction seamlessly.
                                     </p>
-                                    <button
-                                        type="button"
-                                        onClick={() => setSelectedTab('wallet')}
-                                        className="db-btn db-btn-primary"
-                                        style={{ width: '100%', padding: '0.85rem', justifyContent: 'center', fontWeight: 700 }}
-                                    >
+                                    <button type="button" onClick={() => setSelectedTab('wallet')} className="db-btn db-btn-primary" style={{ width: '100%', padding: '0.85rem', justifyContent: 'center', fontWeight: 700 }}>
                                         ⚡ Switch to MCOM Wallet
                                     </button>
                                 </div>
@@ -730,6 +748,54 @@ export function StripeCheckoutModal({
                                 type="button"
                                 className="db-btn db-btn-ghost"
                                 onClick={onClose}
+                                style={{ width: '100%', marginTop: '0.75rem', justifyContent: 'center' }}
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    )}
+
+                    {/* ─── TAB 3: PAYPAL ─────────────────────────────────────────────── */}
+                    {selectedTab === 'paypal' && (
+                        <div>
+                            <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '1.25rem', lineHeight: 1.5 }}>
+                                You will be redirected to PayPal to complete your purchase securely. Once approved, your membership activates instantly.
+                            </p>
+                            {paypalError && (
+                                <div style={{
+                                    marginBottom: '1rem',
+                                    padding: '0.75rem',
+                                    background: '#fef2f2',
+                                    border: '1px solid #fecaca',
+                                    borderRadius: '0.5rem',
+                                    color: '#dc2626',
+                                    fontSize: '0.85rem',
+                                }}>
+                                    {paypalError}
+                                </div>
+                            )}
+                            <button
+                                type="button"
+                                onClick={handlePayPalInitiate}
+                                disabled={paypalInitiating}
+                                className="db-btn db-btn-primary"
+                                style={{
+                                    width: '100%',
+                                    padding: '1rem',
+                                    justifyContent: 'center',
+                                    fontSize: '1rem',
+                                    fontWeight: 800,
+                                    background: '#0070ba',
+                                    borderColor: '#005ea6',
+                                }}
+                            >
+                                {paypalInitiating ? 'Connecting to PayPal…' : `Continue with PayPal (£${price.toFixed(2)})`}
+                            </button>
+                            <button
+                                type="button"
+                                className="db-btn db-btn-ghost"
+                                onClick={onClose}
+                                disabled={paypalInitiating}
                                 style={{ width: '100%', marginTop: '0.75rem', justifyContent: 'center' }}
                             >
                                 Cancel

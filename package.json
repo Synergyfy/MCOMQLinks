@@ -5,8 +5,8 @@
   "private": true,
   "packageManager": "pnpm@9.15.2",
   "scripts": {
-    "build": "turbo build",
-    "dev": "turbo dev",
+    "build": "node init && turbo build",
+    "dev": "node init && turbo dev",
     "lint": "turbo lint"
   },
   "devDependencies": {

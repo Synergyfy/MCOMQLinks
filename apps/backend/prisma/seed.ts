@@ -24,112 +24,215 @@ async function main() {
 
     console.log(`Created/Updated admin user: ${demoAdmin.email}`);
 
-    // 1b. Seed the plan catalogue (upsert by name so the seed can be re-run).
-    // Mirrors the MCOM Links plan tiers and the MCOM Solutions plan contract.
+    // 1b. Seed the 3 platform-wide PlanTierLevels:
+    // STANDARD (90 Days), PRO (180 Days), PRO_PLUS (1 Calendar Year)
+    const tierLevelsData = [
+        { name: 'STANDARD', sortOrder: 1, durationDays: 90, isCalendarYear: false },
+        { name: 'PRO', sortOrder: 2, durationDays: 180, isCalendarYear: false },
+        { name: 'PRO_PLUS', sortOrder: 3, durationDays: null, isCalendarYear: true },
+    ];
+
+    const seededTierLevels: Record<string, any> = {};
+    for (const tl of tierLevelsData) {
+        const tier = await prisma.planTierLevel.upsert({
+            where: { name: tl.name },
+            update: { sortOrder: tl.sortOrder, durationDays: tl.durationDays, isCalendarYear: tl.isCalendarYear },
+            create: { name: tl.name, sortOrder: tl.sortOrder, durationDays: tl.durationDays, isCalendarYear: tl.isCalendarYear },
+        });
+        seededTierLevels[tl.name] = tier;
+    }
+    console.log('Seeded PlanTierLevels: STANDARD (90d), PRO (180d), PRO_PLUS (1yr)');
+
+    // 1c. Seed Plan Families with their 3 Variants and active Prices
     const seedPlans = [
         {
             name: 'Hyper-local',
+            slug: 'hyper-local',
             description: 'The free base tier to get your storefront on the rotator.',
             tagline: 'Start showing your business on MCOMQLinks',
             bestFor: 'Businesses just getting started, testing the platform, local storefront presence',
-            monthlyPrice: 0,
-            quarterlyPrice: 0,
-            annualPrice: 0,
             isFree: true,
-            features: ['1 Active Campaign', 'Postcode-Locked Exposure', 'Standard Support'],
-            limitations: ['No promotion of third-party products/services', 'No automatic renewal (expires after 90 days)', 'No Expo access', 'Standard visibility only'],
-            configuration: { quotas: { maxActiveCampaigns: 1, maxOffers: 5, maxLocations: 1 }, featureFlags: { priorityBoost: false, advancedAnalytics: false, customBranding: false, allowThirdPartyPromotion: false, allowAutoRollover: false, allowExpoAccess: false } },
             isActive: true,
             isDefault: true,
             type: 'STANDARD',
+            variants: [
+                {
+                    tier: 'STANDARD',
+                    price: 0,
+                    features: ['1 Active Campaign', 'Postcode-Locked Exposure', 'Standard Support (90 Days)'],
+                    limitations: ['No promotion of third-party products', 'Expires after 90 days', 'Standard visibility only'],
+                    configuration: { quotas: { maxActiveCampaigns: 1, maxOffers: 5, maxLocations: 1, maxImagesPerListing: 5, featuredListingAllowance: 0 }, featureFlags: { priorityBoost: false, priorityInSearch: false, advancedAnalytics: false, customBranding: false, dedicatedSupport: false, allowThirdPartyPromotion: false, allowAutoRollover: false, allowExpoAccess: false } },
+                },
+                {
+                    tier: 'PRO',
+                    price: 0,
+                    features: ['1 Active Campaign', 'Postcode-Locked Exposure', 'Standard Support (180 Days)'],
+                    limitations: ['No promotion of third-party products', 'Standard visibility only'],
+                    configuration: { quotas: { maxActiveCampaigns: 1, maxOffers: 5, maxLocations: 1, maxImagesPerListing: 5, featuredListingAllowance: 0 }, featureFlags: { priorityBoost: false, priorityInSearch: false, advancedAnalytics: false, customBranding: false, dedicatedSupport: false, allowThirdPartyPromotion: false, allowAutoRollover: true, allowExpoAccess: false } },
+                },
+                {
+                    tier: 'PRO_PLUS',
+                    price: 0,
+                    features: ['1 Active Campaign', 'Postcode-Locked Exposure', 'Standard Support (1 Full Year)'],
+                    limitations: ['No promotion of third-party products', 'Standard visibility only'],
+                    configuration: { quotas: { maxActiveCampaigns: 1, maxOffers: 5, maxLocations: 1, maxImagesPerListing: 5, featuredListingAllowance: 0 }, featureFlags: { priorityBoost: false, priorityInSearch: false, advancedAnalytics: false, customBranding: false, dedicatedSupport: false, allowThirdPartyPromotion: false, allowAutoRollover: true, allowExpoAccess: false } },
+                },
+            ],
         },
         {
             name: 'Nearby Expansion',
+            slug: 'nearby-expansion',
             description: 'B2B outreach and cross-high-street partnerships.',
             tagline: 'Grow beyond your storefront and scale your campaigns',
             bestFor: 'Businesses ready to scale, multi-product/service sellers, partner/collaboration businesses',
-            monthlyPrice: 29.99,
-            quarterlyPrice: 79.99,
-            annualPrice: 299.99,
             isFree: false,
-            features: ['Expansion Radius Add-ons', 'Multiple Nearby Districts', 'B2B Partnerships', 'Growth Support'],
-            limitations: ['No Expo access', 'Standard visibility only'],
-            configuration: { quotas: { maxActiveCampaigns: 5, maxOffers: 20, maxLocations: 5, allowNearbyExpansion: true }, featureFlags: { priorityBoost: true, advancedAnalytics: true, customBranding: true, allowThirdPartyPromotion: true, allowAutoRollover: true, allowExpoAccess: false } },
             isActive: true,
             isDefault: false,
             type: 'STANDARD',
+            variants: [
+                {
+                    tier: 'STANDARD',
+                    price: 29.99,
+                    features: ['Expansion Radius Add-ons', 'Multiple Nearby Districts', 'B2B Partnerships', 'Growth Support (90 Days)'],
+                    limitations: ['No Expo access', 'Standard priority boost'],
+                    configuration: { quotas: { maxActiveCampaigns: 5, maxOffers: 20, maxLocations: 5, maxImagesPerListing: 15, featuredListingAllowance: 2, allowNearbyExpansion: true }, featureFlags: { priorityBoost: true, priorityInSearch: true, advancedAnalytics: true, customBranding: true, dedicatedSupport: false, allowThirdPartyPromotion: true, allowAutoRollover: true, allowExpoAccess: false } },
+                },
+                {
+                    tier: 'PRO',
+                    price: 54.99,
+                    features: ['Expansion Radius Add-ons', 'Multiple Nearby Districts', 'B2B Partnerships', 'Growth Support (180 Days)', 'Continuous Rollover'],
+                    limitations: ['No Expo access'],
+                    configuration: { quotas: { maxActiveCampaigns: 8, maxOffers: 35, maxLocations: 10, maxImagesPerListing: 20, featuredListingAllowance: 4, allowNearbyExpansion: true }, featureFlags: { priorityBoost: true, priorityInSearch: true, advancedAnalytics: true, customBranding: true, dedicatedSupport: true, allowThirdPartyPromotion: true, allowAutoRollover: true, allowExpoAccess: false } },
+                },
+                {
+                    tier: 'PRO_PLUS',
+                    price: 99.99,
+                    features: ['Expansion Radius Add-ons', 'Multiple Nearby Districts', 'B2B Partnerships', 'Growth Support (1 Full Year)', 'VIP Priority Support'],
+                    limitations: [],
+                    configuration: { quotas: { maxActiveCampaigns: 12, maxOffers: 50, maxLocations: 15, maxImagesPerListing: 30, featuredListingAllowance: 8, allowNearbyExpansion: true }, featureFlags: { priorityBoost: true, priorityInSearch: true, advancedAnalytics: true, customBranding: true, dedicatedSupport: true, allowThirdPartyPromotion: true, allowAutoRollover: true, allowExpoAccess: false } },
+                },
+            ],
         },
         {
             name: 'National Network',
+            slug: 'national-network',
             description: 'Platform-wide fallback campaigns and corporate branding.',
             tagline: 'Maximum exposure, priority access, and event promotion',
             bestFor: 'Serious businesses, brands launching products/services, businesses that want maximum visibility',
-            monthlyPrice: 99.99,
-            quarterlyPrice: 269.99,
-            annualPrice: 999.99,
             isFree: false,
-            features: ['CPM or Fixed Slot Access', 'Premium Override Rights', 'Platform-Wide Exposure', 'Platinum Concierge'],
-            limitations: [],
-            configuration: { quotas: { maxActiveCampaigns: 20, maxOffers: 100, maxLocations: 50, allowNearbyExpansion: true, allowNationalNetwork: true }, featureFlags: { priorityBoost: true, advancedAnalytics: true, customBranding: true, allowThirdPartyPromotion: true, allowAutoRollover: true, allowExpoAccess: true } },
             isActive: true,
             isDefault: false,
             type: 'STANDARD',
+            variants: [
+                {
+                    tier: 'STANDARD',
+                    price: 99.99,
+                    features: ['CPM or Fixed Slot Access', 'Premium Override Rights', 'Platform-Wide Exposure', 'Platinum Concierge (90 Days)'],
+                    limitations: [],
+                    configuration: { quotas: { maxActiveCampaigns: 20, maxOffers: 100, maxLocations: 50, maxImagesPerListing: 50, featuredListingAllowance: 10, allowNearbyExpansion: true, allowNationalNetwork: true }, featureFlags: { priorityBoost: true, priorityInSearch: true, advancedAnalytics: true, customBranding: true, dedicatedSupport: true, allowThirdPartyPromotion: true, allowAutoRollover: true, allowExpoAccess: true } },
+                },
+                {
+                    tier: 'PRO',
+                    price: 189.99,
+                    features: ['CPM or Fixed Slot Access', 'Premium Override Rights', 'Platform-Wide Exposure', 'Platinum Concierge (180 Days)', 'Expo Guaranteed Pass'],
+                    limitations: [],
+                    configuration: { quotas: { maxActiveCampaigns: 35, maxOffers: 200, maxLocations: 100, maxImagesPerListing: 100, featuredListingAllowance: 25, allowNearbyExpansion: true, allowNationalNetwork: true }, featureFlags: { priorityBoost: true, priorityInSearch: true, advancedAnalytics: true, customBranding: true, dedicatedSupport: true, allowThirdPartyPromotion: true, allowAutoRollover: true, allowExpoAccess: true } },
+                },
+                {
+                    tier: 'PRO_PLUS',
+                    price: 349.99,
+                    features: ['CPM or Fixed Slot Access', 'Premium Override Rights', 'Platform-Wide Exposure', 'Platinum Concierge (1 Full Year)', 'Unlimited Expo Access', 'Dedicated Account Manager'],
+                    limitations: [],
+                    configuration: { quotas: { maxActiveCampaigns: 50, maxOffers: 500, maxLocations: 250, maxImagesPerListing: 200, featuredListingAllowance: 50, allowNearbyExpansion: true, allowNationalNetwork: true }, featureFlags: { priorityBoost: true, priorityInSearch: true, advancedAnalytics: true, customBranding: true, dedicatedSupport: true, allowThirdPartyPromotion: true, allowAutoRollover: true, allowExpoAccess: true } },
+                },
+            ],
         },
-        {
-            name: 'National Trial',
-            description: 'A 14-day trial of the National Network.',
-            tagline: 'Full National Network access for 14 days free',
-            bestFor: 'New businesses wanting to try the platform risk-free',
-            monthlyPrice: 0,
-            quarterlyPrice: 0,
-            annualPrice: 0,
-            isFree: true,
-            features: ['Full National Access', 'Priority Override', '14 Days Free'],
-            limitations: ['Limited to 14 days', 'No auto rollover'],
-            configuration: { quotas: { maxActiveCampaigns: 3, maxOffers: 10, maxLocations: 3, allowNearbyExpansion: true, allowNationalNetwork: true }, featureFlags: { priorityBoost: true, advancedAnalytics: true, customBranding: true, allowThirdPartyPromotion: true, allowAutoRollover: false, allowExpoAccess: true } },
-            isActive: true,
-            isDefault: false,
-            type: 'TRIAL',
-            trialDuration: 14,
-        },
-    ] as any[];
+    ];
 
-    for (const plan of seedPlans) {
-        const existing = await prisma.plan.findFirst({ where: { name: plan.name } });
-        const data = {
-            name: plan.name,
-            description: plan.description,
-            tagline: plan.tagline ?? null,
-            bestFor: plan.bestFor ?? null,
-            isFree: plan.isFree ?? false,
-            monthlyPrice: plan.isFree ? 0 : plan.monthlyPrice,
-            quarterlyPrice: plan.isFree ? 0 : plan.quarterlyPrice,
-            annualPrice: plan.isFree ? 0 : plan.annualPrice,
-            features: JSON.stringify(plan.features),
-            limitations: JSON.stringify(plan.limitations ?? []),
-            configuration: JSON.stringify(plan.configuration),
-            isActive: plan.isActive,
-            isDefault: plan.isDefault,
-            type: plan.type,
-            trialDuration: plan.trialDuration ?? null,
+    for (const p of seedPlans) {
+        let plan = await prisma.plan.findUnique({ where: { slug: p.slug } });
+        const planData = {
+            name: p.name,
+            slug: p.slug,
+            description: p.description,
+            tagline: p.tagline,
+            bestFor: p.bestFor,
+            isFree: p.isFree,
+            isActive: p.isActive,
+            isDefault: p.isDefault,
+            type: p.type,
+            monthlyPrice: p.variants[0]?.price ?? 0,
+            quarterlyPrice: p.variants[1]?.price ?? 0,
+            annualPrice: p.variants[2]?.price ?? 0,
+            features: JSON.stringify(p.variants[0]?.features ?? []),
+            configuration: JSON.stringify(p.variants[0]?.configuration ?? {}),
         };
-        if (existing) {
-            await prisma.plan.update({ where: { id: existing.id }, data });
+
+        if (plan) {
+            plan = await prisma.plan.update({ where: { id: plan.id }, data: planData });
         } else {
-            await prisma.plan.create({ data });
+            plan = await prisma.plan.create({ data: planData });
+        }
+
+        for (const v of p.variants) {
+            const tierLevel = seededTierLevels[v.tier];
+            if (!tierLevel) continue;
+
+            let variant = await prisma.planVariant.findFirst({
+                where: { planId: plan.id, tierLevelId: tierLevel.id },
+            });
+
+            const variantData = {
+                planId: plan.id,
+                tierLevelId: tierLevel.id,
+                isActive: true,
+                features: JSON.stringify(v.features),
+                limitations: JSON.stringify(v.limitations || []),
+                configuration: JSON.stringify(v.configuration),
+            };
+
+            if (variant) {
+                variant = await prisma.planVariant.update({ where: { id: variant.id }, data: variantData });
+            } else {
+                variant = await prisma.planVariant.create({ data: variantData });
+            }
+
+            // Ensure active price
+            const existingPrice = await prisma.planPrice.findFirst({
+                where: { planVariantId: variant.id, isActive: true },
+            });
+
+            if (existingPrice) {
+                if (existingPrice.amount !== v.price) {
+                    await prisma.planPrice.update({
+                        where: { id: existingPrice.id },
+                        data: { isActive: false, effectiveTo: new Date() },
+                    });
+                    await prisma.planPrice.create({
+                        data: {
+                            planVariantId: variant.id,
+                            currency: 'GBP',
+                            amount: v.price,
+                            isActive: true,
+                            effectiveFrom: new Date(),
+                        },
+                    });
+                }
+            } else {
+                await prisma.planPrice.create({
+                    data: {
+                        planVariantId: variant.id,
+                        currency: 'GBP',
+                        amount: v.price,
+                        isActive: true,
+                        effectiveFrom: new Date(),
+                    },
+                });
+            }
         }
     }
 
-    // Ensure only one default plan after (re)seeding.
-    const firstDefault = await prisma.plan.findFirst({ where: { isDefault: true } });
-    if (firstDefault) {
-        await prisma.plan.updateMany({
-            where: { isDefault: true, id: { not: firstDefault.id } },
-            data: { isDefault: false },
-        });
-    }
-
-    console.log(`Seeded ${seedPlans.length} plans.`);
+    console.log(`Seeded ${seedPlans.length} plans with 3 variants each.`);
 
     // 2. Clear old data
     await prisma.rotatorConfig.deleteMany();

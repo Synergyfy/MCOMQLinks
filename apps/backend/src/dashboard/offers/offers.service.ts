@@ -1,11 +1,14 @@
 import {
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { CreateOfferDto } from './dto/create-offer.dto';
 import { UpdateOfferDto } from './dto/update-offer.dto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PurchaseService } from '../../mcom/purchase/purchase.service';
 
 // Fields a business owner must never be able to set themselves. These are
 // controlled by Admin/Agent workflows or the billing/rotator systems.
@@ -19,7 +22,10 @@ const PRIVILEGED_OFFER_FIELDS = [
 
 @Injectable()
 export class OffersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly purchaseService: PurchaseService,
+  ) {}
 
   private async getBusinessName(userId: string): Promise<string> {
     const profile = await this.prisma.businessProfile.findUnique({
@@ -34,9 +40,30 @@ export class OffersService {
   }
 
   async create(userId: string, createOfferDto: CreateOfferDto) {
-    const { season, ...dto } = createOfferDto;
     const businessName = await this.getBusinessName(userId);
 
+    // Defense-in-depth quota verification
+    const membership = await this.purchaseService.getActiveMembership(userId);
+    if (membership && membership.configuration?.quotas?.maxOffers) {
+      const maxOffers = Number(membership.configuration.quotas.maxOffers);
+      if (maxOffers > 0) {
+        const currentCount = await this.prisma.offer.count({
+          where: { businessName },
+        });
+        if (currentCount >= maxOffers) {
+          throw new ForbiddenException({
+            statusCode: HttpStatus.FORBIDDEN,
+            message: `Offer limit reached for your plan (${currentCount}/${maxOffers}). Upgrade your plan to publish more offers.`,
+            code: 'QUOTA_EXCEEDED',
+            quotaKey: 'maxOffers',
+            currentCount,
+            limit: maxOffers,
+          });
+        }
+      }
+    }
+
+    const { season, ...dto } = createOfferDto;
     const data: Record<string, unknown> = { ...dto };
     PRIVILEGED_OFFER_FIELDS.forEach((field) => delete data[field]);
 

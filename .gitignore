@@ -28,7 +28,6 @@ dist_*.txt
 validate.txt
 
 # IDE
-.vscode
 .idea
 
 # OS
@@ -36,9 +35,8 @@ validate.txt
 Thumbs.db
 
 # Environment
-.env
-.env.local
 .env.*.local
 
 # Opencode plans (local-only)
 .opencode/
+config.bat

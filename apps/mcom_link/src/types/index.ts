@@ -130,12 +130,84 @@ export interface SessionUser {
 
 // MCOM Ecosystem: centrally-managed plan (Plan CRUD & centralized payments)
 export type BillingCycle = 'monthly' | 'quarterly' | 'annual'
-export type PaymentProvider = 'stripe' | 'paypal' | 'wallet'
+export type PaymentProvider = 'stripe' | 'paypal' | 'wallet' | 'mcom_wallet'
 export type PlanType = 'STANDARD' | 'TRIAL' | 'SEASONAL'
+export type PlanTierLevelName = 'STANDARD' | 'PRO' | 'PRO_PLUS'
+
+export interface PlanVariantConfiguration {
+    quotas: {
+        maxListings?: number;
+        maxOffers?: number;
+        maxLocations?: number;
+        maxActiveCampaigns?: number;
+        allowProductListing?: boolean;
+        allowServiceListing?: boolean;
+        maxProducts?: number;
+        maxServices?: number;
+        maxGiftCardTemplates?: number;
+        maxCouponTemplates?: number;
+        maxLoyaltyPrograms?: number;
+        maxImagesPerListing?: number;
+        featuredListingAllowance?: number;
+        allowNearbyExpansion?: boolean;
+        allowNationalNetwork?: boolean;
+        [key: string]: any;
+    };
+    featureFlags: {
+        priorityInSearch?: boolean;
+        priorityBoost?: boolean;
+        advancedAnalytics?: boolean;
+        dedicatedSupport?: boolean;
+        allowCustomBranding?: boolean;
+        allowGroupCreation?: boolean;
+        allowThirdPartyPromotion?: boolean;
+        allowAutoRollover?: boolean;
+        allowExpoAccess?: boolean;
+        [key: string]: any;
+    };
+    disabledNavIds?: string[];
+}
+
+export interface PlanTierLevel {
+    id: string;
+    name: PlanTierLevelName;
+    sortOrder: number;
+    durationDays: number | null;
+    isCalendarYear: boolean;
+}
+
+export interface PlanPrice {
+    id: string;
+    amount: number;
+    currency: string;
+    stripePriceId?: string;
+    paypalPlanId?: string;
+    isActive: boolean;
+    effectiveFrom: string;
+    effectiveTo?: string | null;
+}
+
+export interface PlanVariant {
+    id: string;
+    planId: string;
+    tierLevelId: string;
+    tier: PlanTierLevelName;
+    tierLevel?: PlanTierLevel;
+    isActive: boolean;
+    features: string[];
+    limitations: string[];
+    configuration: PlanVariantConfiguration;
+    price: number;
+    activePrice?: PlanPrice | null;
+    plan?: Plan;
+    createdAt?: string;
+    updatedAt?: string;
+}
 
 export interface Plan {
     id: string
     name: string
+    slug: string
     description?: string
     tagline?: string
     bestFor?: string
@@ -145,15 +217,13 @@ export interface Plan {
     annualPrice: number
     features: string[]
     limitations?: string[]
-    configuration: {
-        quotas: Record<string, number | boolean>
-        featureFlags: Record<string, boolean>
-    }
+    configuration: PlanVariantConfiguration
     isActive: boolean
     isDefault: boolean
     type: PlanType
     trialDuration?: number
     seasonId?: string
+    variants: PlanVariant[]
     stripeMonthlyPriceId?: string
     stripeQuarterlyPriceId?: string
     stripeAnnualPriceId?: string
@@ -164,11 +234,56 @@ export interface Plan {
     updatedAt?: string
 }
 
-export interface PurchasedPackage {
-    id: string
-    planId: string
-    planName: string
-    billingCycle: BillingCycle
-    status: 'active' | 'cancelled' | 'expired'
-    expiresAt: string
+export interface Membership {
+    id: string;
+    userId: string;
+    planVariantId: string;
+    planId?: string;
+    planName: string;
+    displayName: string;
+    status?: 'ACTIVE' | 'EXPIRED' | string;
+    tier: PlanTierLevelName;
+    tierLabel: string;
+    isActive: boolean;
+    isTrial: boolean;
+    startDate: string;
+    expiresAt: string;
+    endDate: string;
+    price: number;
+    currency: string;
+    features: string[];
+    configuration: PlanVariantConfiguration;
+    planVariant?: PlanVariant | null;
+    plan?: Plan | null;
+    payment?: {
+        id: string;
+        amount: number;
+        currency: string;
+        paymentMethod: string;
+        transactionId: string;
+    } | null;
+    payments?: Array<{
+        id: string;
+        userId: string;
+        amount: number;
+        currency: string;
+        paymentMethod: string;
+        transactionId: string;
+        tierLevel?: string;
+        status: string;
+        createdAt: string;
+    }>;
 }
+
+export interface PurchasedPackage {
+    id?: string
+    planId?: string
+    planVariantId?: string
+    planName?: string
+    packageName?: string
+    tier?: string
+    billingCycle?: BillingCycle
+    status?: 'active' | 'cancelled' | 'expired'
+    expiresAt?: string
+}
+

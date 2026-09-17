@@ -1,5 +1,5 @@
 import { api } from './apiClient'
-import type { Plan } from '../types'
+import type { Plan, PlanTierLevelName, PlanVariantConfiguration, Membership } from '../types'
 
 export interface SchemaDescriptor {
     key: string
@@ -13,7 +13,43 @@ export interface PlanSchema {
     featureFlags: SchemaDescriptor[]
 }
 
-export type PlanInput = Omit<Plan, 'id' | 'createdAt' | 'updatedAt'>
+export interface VariantInput {
+    tier: PlanTierLevelName
+    price: number
+    features?: string[]
+    limitations?: string[]
+    configuration?: PlanVariantConfiguration
+    stripePriceId?: string
+    paypalPlanId?: string
+}
+
+export interface PlanInput {
+    name: string
+    slug?: string
+    description?: string
+    tagline?: string
+    bestFor?: string
+    isFree?: boolean
+    isActive?: boolean
+    isDefault?: boolean
+    type?: 'STANDARD' | 'TRIAL' | 'SEASONAL'
+    trialDuration?: number
+    seasonId?: string
+    variants: VariantInput[]
+    // Backward compatibility fields
+    monthlyPrice?: number
+    quarterlyPrice?: number
+    annualPrice?: number
+    features?: string[]
+    limitations?: string[]
+    configuration?: PlanVariantConfiguration
+    stripeMonthlyPriceId?: string
+    stripeQuarterlyPriceId?: string
+    stripeAnnualPriceId?: string
+    paypalMonthlyPlanId?: string
+    paypalQuarterlyPlanId?: string
+    paypalAnnualPlanId?: string
+}
 
 export async function getPlans(): Promise<Plan[]> {
     return api.get<Plan[]>('/admin/plans')
@@ -43,6 +79,21 @@ export async function updatePlan(id: string, input: Partial<PlanInput>): Promise
     return api.patch<Plan>(`/admin/plans/${id}`, input)
 }
 
+export async function repriceVariant(
+    variantId: string,
+    data: { amount: number; currency?: string; stripePriceId?: string; paypalPlanId?: string },
+): Promise<any> {
+    return api.post(`/admin/plans/variants/${variantId}/prices`, data)
+}
+
 export async function deletePlan(id: string): Promise<{ success: boolean }> {
     return api.delete<{ success: boolean }>(`/admin/plans/${id}`)
+}
+
+export async function getActiveMembership(): Promise<Membership | null> {
+    try {
+        return await api.get<Membership>('/api/v1/mcom/packages/purchase/membership')
+    } catch {
+        return null
+    }
 }

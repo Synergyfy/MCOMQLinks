@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Request, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Request, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { Roles } from '../../auth/roles.decorator';
@@ -17,6 +17,12 @@ import { PurchaseService } from './purchase.service';
 @Controller('api/v1/mcom/packages/purchase')
 export class PurchaseController {
   constructor(private readonly purchaseService: PurchaseService) {}
+
+  @Get('membership')
+  @ApiOperation({ summary: 'Get current user active membership details' })
+  getMembership(@Request() req: any) {
+    return this.purchaseService.getActiveMembership(req.user.id);
+  }
 
   @Post('initiate')
   @ApiOperation({
@@ -43,3 +49,35 @@ export class PurchaseController {
   }
 }
 
+@ApiTags('MCOM Membership')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('BUSINESS', 'ADMIN')
+@Controller('membership')
+export class MembershipController {
+  constructor(private readonly purchaseService: PurchaseService) {}
+
+  @Get('me')
+  @ApiOperation({ summary: 'Get active membership' })
+  getMembership(@Request() req: any) {
+    return this.purchaseService.getActiveMembership(req.user.id);
+  }
+
+  @Post('initiate-payment')
+  @ApiOperation({ summary: 'Initiate membership payment' })
+  initiate(@Request() req: any, @Body() dto: InitiatePurchaseDto) {
+    return this.purchaseService.initiate(req.user.id, dto);
+  }
+
+  @Post('verify-payment')
+  @ApiOperation({ summary: 'Verify and activate membership payment' })
+  verify(@Request() req: any, @Body() dto: ConfirmPurchaseDto) {
+    return this.purchaseService.confirm(req.user.id, dto);
+  }
+
+  @Post('wallet-payment')
+  @ApiOperation({ summary: 'Pay for membership using wallet' })
+  wallet(@Request() req: any, @Body() dto: PurchaseWalletDto) {
+    return this.purchaseService.purchaseWithWallet(req.user.id, dto);
+  }
+}

@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsOptional, IsString } from 'class-validator';
 
 export enum BillingCycle {
   MONTHLY = 'monthly',
@@ -11,17 +11,27 @@ export enum PaymentProvider {
   STRIPE = 'stripe',
   PAYPAL = 'paypal',
   WALLET = 'wallet',
+  MCOM_WALLET = 'mcom_wallet',
 }
 
 export class InitiatePurchaseDto {
-  @ApiProperty({ example: '7b093f1d-192a-4ce4-8e12-32a89345091a' })
+  @ApiPropertyOptional({
+    example: '7b093f1d-192a-4ce4-8e12-32a89345091a',
+    description: 'Plan Variant ID or Plan ID',
+  })
   @IsString()
-  @IsNotEmpty()
-  externalPlanId: string;
+  @IsOptional()
+  planVariantId?: string;
 
-  @ApiProperty({ enum: BillingCycle, example: BillingCycle.MONTHLY })
+  @ApiPropertyOptional({ example: '7b093f1d-192a-4ce4-8e12-32a89345091a' })
+  @IsString()
+  @IsOptional()
+  externalPlanId?: string;
+
+  @ApiPropertyOptional({ enum: BillingCycle, default: BillingCycle.MONTHLY })
   @IsEnum(BillingCycle)
-  billingCycle: BillingCycle;
+  @IsOptional()
+  billingCycle?: BillingCycle;
 
   @ApiProperty({ enum: PaymentProvider, example: PaymentProvider.STRIPE })
   @IsEnum(PaymentProvider)
@@ -36,36 +46,67 @@ export class InitiatePurchaseDto {
   @IsString()
   @IsOptional()
   cancelUrl?: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  idempotencyKey?: string;
 }
 
 export class ConfirmPurchaseDto {
-  @ApiProperty({ example: '7b093f1d-192a-4ce4-8e12-32a89345091a' })
+  @ApiPropertyOptional({ example: '7b093f1d-192a-4ce4-8e12-32a89345091a' })
   @IsString()
-  @IsNotEmpty()
-  externalPlanId: string;
+  @IsOptional()
+  planVariantId?: string;
 
-  @ApiProperty({ enum: BillingCycle, example: BillingCycle.MONTHLY })
+  @ApiPropertyOptional({ example: '7b093f1d-192a-4ce4-8e12-32a89345091a' })
+  @IsString()
+  @IsOptional()
+  externalPlanId?: string;
+
+  @ApiPropertyOptional({ enum: BillingCycle, default: BillingCycle.MONTHLY })
   @IsEnum(BillingCycle)
-  billingCycle: BillingCycle;
+  @IsOptional()
+  billingCycle?: BillingCycle;
 
   @ApiProperty({ enum: PaymentProvider, example: PaymentProvider.STRIPE })
   @IsEnum(PaymentProvider)
   provider: PaymentProvider;
 
-  @ApiProperty({ example: 'pi_xxx_secret_yyy' })
+  @ApiPropertyOptional({ example: 'pi_xxx_secret_yyy' })
   @IsString()
-  @IsNotEmpty()
-  paymentIntentId: string;
+  @IsOptional()
+  paymentIntentId?: string;
+
+  @ApiPropertyOptional({ example: 'pi_xxx' })
+  @IsString()
+  @IsOptional()
+  transactionId?: string;
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  holdId?: string;
 }
 
 export class PurchaseWalletDto {
-  @ApiProperty({ example: '7b093f1d-192a-4ce4-8e12-32a89345091a' })
+  @ApiPropertyOptional({ example: '7b093f1d-192a-4ce4-8e12-32a89345091a' })
   @IsString()
-  @IsNotEmpty()
-  externalPlanId: string;
+  @IsOptional()
+  planVariantId?: string;
 
-  @ApiProperty({ enum: BillingCycle, example: BillingCycle.MONTHLY })
+  @ApiPropertyOptional({ example: '7b093f1d-192a-4ce4-8e12-32a89345091a' })
+  @IsString()
+  @IsOptional()
+  externalPlanId?: string;
+
+  @ApiPropertyOptional({ enum: BillingCycle, default: BillingCycle.MONTHLY })
   @IsEnum(BillingCycle)
-  billingCycle: BillingCycle;
-}
+  @IsOptional()
+  billingCycle?: BillingCycle;
 
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  idempotencyKey?: string;
+}

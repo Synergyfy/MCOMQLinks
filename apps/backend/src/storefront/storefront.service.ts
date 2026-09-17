@@ -56,13 +56,47 @@ export class StorefrontService {
     ];
     const profiles = await this.prisma.businessProfile.findMany({
       where: { name: { in: businessNames } },
-      select: { name: true, subscriptionStatus: true, planExpiresAt: true },
+      select: {
+        name: true,
+        subscriptionStatus: true,
+        planExpiresAt: true,
+        user: {
+          select: {
+            membership: {
+              select: {
+                isActive: true,
+                expiresAt: true,
+                planVariant: { select: { configuration: true } },
+              },
+            },
+          },
+        },
+      },
     });
     const lockedOut = new Map<string, boolean>();
+    const priorityBoosted = new Map<string, boolean>();
+
     for (const p of profiles) {
-      const isLocked =
+      let isLocked =
         p.subscriptionStatus !== 'active' ||
         (p.planExpiresAt !== null && p.planExpiresAt < now);
+
+      if (p.user?.membership) {
+        const mem = p.user.membership;
+        if (!mem.isActive || (mem.expiresAt && mem.expiresAt < now)) {
+          isLocked = true;
+        }
+
+        try {
+          const config = JSON.parse(mem.planVariant?.configuration || '{}');
+          if (config?.featureFlags?.priorityBoost === true) {
+            priorityBoosted.set(p.name, true);
+          }
+        } catch {
+          // ignore json parse error
+        }
+      }
+
       lockedOut.set(p.name, isLocked);
     }
     const validOffers = rawValidOffers.filter(
@@ -80,6 +114,13 @@ export class StorefrontService {
       weights = JSON.parse(config.weights || '{}');
     } catch {
       weights = {};
+    }
+
+    // Apply priorityBoost multiplier (2x weight) for businesses with active priorityBoost feature flag
+    for (const offer of validOffers) {
+      if (priorityBoosted.get(offer.businessName)) {
+        weights[offer.id] = (weights[offer.id] || 1) * 2;
+      }
     }
 
     if (config.type === 'random') {

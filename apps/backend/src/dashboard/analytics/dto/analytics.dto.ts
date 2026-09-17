@@ -72,4 +72,10 @@ export class AnalyticsDataDto {
     description: 'Recent engagement feed',
   })
   recentEngagement: RecentEngagementDto[];
+
+  @ApiProperty({
+    example: true,
+    description: 'Whether advanced analytics is enabled on current plan',
+  })
+  hasAdvancedAnalytics?: boolean;
 }
